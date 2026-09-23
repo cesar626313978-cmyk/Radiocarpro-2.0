@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="192" height="192">
+  <rect width="512" height="512" fill="#131313" rx="96"/>
+  <rect x="32" y="32" width="448" height="448" fill="#1A1A1A" stroke="#000000" stroke-width="16" rx="64"/>
+  
+  <!-- Radio Body -->
+  <rect x="80" y="140" width="352" height="260" fill="#201F1F" stroke="#000000" stroke-width="14" rx="28"/>
+  
+  <!-- Accent top bar -->
+  <rect x="80" y="140" width="352" height="36" fill="#8B5CF6" stroke="#000000" stroke-width="10" rx="20"/>
+  
+  <!-- Radio Speaker Grill -->
+  <circle cx="180" cy="280" r="70" fill="#131313" stroke="#000000" stroke-width="10"/>
+  <circle cx="180" cy="280" r="45" fill="#4EDEA3" stroke="#000000" stroke-width="8"/>
+  <circle cx="180" cy="280" r="18" fill="#003824"/>
+  
+  <!-- Tuning Dial and Controls -->
+  <circle cx="340" cy="240" r="38" fill="#06B6D4" stroke="#000000" stroke-width="10"/>
+  <circle cx="340" cy="240" r="12" fill="#000000"/>
+  
+  <rect x="310" y="310" width="60" height="20" fill="#EF4444" stroke="#000000" stroke-width="6" rx="6"/>
+  <rect x="310" y="344" width="60" height="20" fill="#F59E0B" stroke="#000000" stroke-width="6" rx="6"/>
+  
+  <!-- Antenna -->
+  <line x1="120" y1="140" x2="220" y2="60" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="220" cy="60" r="16" fill="#4EDEA3" stroke="#000000" stroke-width="6"/>
+</svg>

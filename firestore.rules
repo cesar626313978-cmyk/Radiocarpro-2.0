@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User Profile and Preferences
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create, update: if isOwner(userId) && isValidId(userId);
+      allow delete: if isOwner(userId);
+
+      // User Alarms subcollection
+      match /alarms/{alarmId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(alarmId);
+        allow delete: if isOwner(userId) && isValidId(alarmId);
+      }
+    }
+
+    // Tesla Mobile Pairing (temporary codes for in-car sync)
+    match /tesla_pairings/{code} {
+      allow get, list, create, update, delete: if isValidId(code);
+    }
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User preferences and sync state in RadioStream",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User profile photo URL"
+        },
+        "favorites": {
+          "type": "array",
+          "description": "Array of favorite radio station IDs and data"
+        },
+        "recentStations": {
+          "type": "array",
+          "description": "Array of recently listened station IDs"
+        },
+        "settings": {
+          "type": "object",
+          "description": "User settings such as buffer size, language, fade-out time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["userId", "email"]
+    },
+    "UserAlarm": {
+      "title": "UserAlarm",
+      "description": "Scheduled alarm clock record for user",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Alarm unique identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID"
+        },
+        "time": {
+          "type": "string",
+          "description": "Alarm time format HH:MM"
+        },
+        "days": {
+          "type": "array",
+          "description": "Active days list"
+        },
+        "stationId": {
+          "type": "string",
+          "description": "Station ID"
+        },
+        "stationName": {
+          "type": "string",
+          "description": "Station display name"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether alarm is active"
+        },
+        "label": {
+          "type": "string",
+          "description": "Alarm label"
+        },
+        "volume": {
+          "type": "number",
+          "description": "Initial alarm volume percentage"
+        }
+      },
+      "required": ["id", "userId", "time", "stationId", "active"]
+    },
+    "TeslaPairing": {
+      "title": "TeslaPairing",
+      "description": "Short-lived pairing token for syncing mobile login to Tesla screen",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Pairing alphanumeric code"
+        },
+        "token": {
+          "type": "string",
+          "description": "Google Drive OAuth access token"
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "User Google email"
+        },
+        "userDisplayName": {
+          "type": "string",
+          "description": "User Google display name"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp"
+        }
+      },
+      "required": ["code", "token"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "UserProfile"
+      },
+      "description": "Stores user profile and synced favorites"
+    },
+    "/users/{userId}/alarms/{alarmId}": {
+      "schema": {
+        "$ref": "UserAlarm"
+      },
+      "description": "Stores user scheduled radio alarms"
+    },
+    "/tesla_pairings/{code}": {
+      "schema": {
+        "$ref": "TeslaPairing"
+      },
+      "description": "Stores temporary pairing codes for mobile sync in Tesla cars"
+    }
+  }
+}
