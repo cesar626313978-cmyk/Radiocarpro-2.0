@@ -25,9 +25,17 @@
           "type": "array",
           "description": "Array of favorite radio station IDs and data"
         },
+        "favoriteStationObjects": {
+          "type": "array",
+          "description": "Array of full RadioStation objects"
+        },
         "recentStations": {
           "type": "array",
           "description": "Array of recently listened station IDs"
+        },
+        "alarms": {
+          "type": "array",
+          "description": "Array of user alarms"
         },
         "settings": {
           "type": "object",

@@ -292,14 +292,7 @@ export const INITIAL_ALARMS: Alarm[] = [
   }
 ];
 
-export const INITIAL_FAVORITES: string[] = [
-  'heart-80s',
-  'pure-ibiza-radio',
-  'cadena-100',
-  'rock-fm',
-  'cadena-dial',
-  '80-exitos'
-];
+export const INITIAL_FAVORITES: string[] = [];
 
 export const NEWS_TICKER_ITEMS = [
   'Seguridad en las fronteras españolas bajo revisión constante',

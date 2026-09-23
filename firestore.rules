@@ -19,6 +19,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Health and connectivity probe
+    match /test/connection {
+      allow get: if true;
+    }
+
     // User Profile and Preferences
     match /users/{userId} {
       allow get: if isOwner(userId);

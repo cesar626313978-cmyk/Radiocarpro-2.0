@@ -5,9 +5,12 @@ export interface TeslaPairingData {
   code: string;
   status: 'pending' | 'paired' | 'expired';
   token?: string;
+  uid?: string;
   userEmail?: string;
   userDisplayName?: string;
   userPhoto?: string;
+  favorites?: string[];
+  favoriteStationObjects?: any[];
   createdAt: string;
   pairedAt?: string;
 }
@@ -73,17 +76,66 @@ export class TeslaPairingService {
   public async completeSession(
     code: string,
     token: string,
-    userInfo: { email?: string; displayName?: string; photoURL?: string }
+    userInfo: {
+      uid?: string;
+      email?: string;
+      displayName?: string;
+      photoURL?: string;
+      favorites?: string[];
+      favoriteStationObjects?: any[];
+    }
   ): Promise<void> {
     const docRef = doc(db, 'tesla_pairings', code);
     await updateDoc(docRef, {
       status: 'paired',
       token,
+      uid: userInfo.uid || '',
       userEmail: userInfo.email || '',
       userDisplayName: userInfo.displayName || '',
       userPhoto: userInfo.photoURL || '',
+      favorites: userInfo.favorites || [],
+      favoriteStationObjects: userInfo.favoriteStationObjects || [],
       pairedAt: new Date().toISOString(),
     });
+  }
+
+  /**
+   * Sync favorites & preferences for a paired Tesla session
+   */
+  public async savePairedPreferences(
+    syncKey: string,
+    data: { favorites: string[]; favoriteStationObjects?: any[] }
+  ): Promise<void> {
+    if (!syncKey) return;
+    const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);
+    const docRef = doc(db, 'tesla_pairings', cleanKey);
+    await setDoc(docRef, {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  }
+
+  /**
+   * Listen for real-time preferences changes across paired devices
+   */
+  public subscribeToPairedPreferences(
+    syncKey: string,
+    onUpdate: (data: { favorites?: string[]; favoriteStationObjects?: any[] }) => void
+  ): () => void {
+    if (!syncKey) return () => {};
+    const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);
+    const docRef = doc(db, 'tesla_pairings', cleanKey);
+    return onSnapshot(
+      docRef,
+      snapshot => {
+        if (snapshot.exists()) {
+          onUpdate(snapshot.data() as any);
+        }
+      },
+      err => {
+        console.warn('Paired preferences subscription error:', err);
+      }
+    );
   }
 }
 

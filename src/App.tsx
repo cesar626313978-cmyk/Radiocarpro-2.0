@@ -18,6 +18,8 @@ import { MobilePairingView } from './components/MobilePairingView';
 import { audioEngine } from './services/audioEngine';
 import { driveAudioEngine } from './services/driveAudioEngine';
 import { googleDriveService } from './services/googleDriveService';
+import { teslaPairingService } from './services/teslaPairingService';
+import { teslaBackgroundService } from './services/teslaBackgroundService';
 import {
   auth,
   signInWithGoogle,
@@ -25,12 +27,21 @@ import {
   logOutUser,
   onAuthStateChanged,
   saveUserPreferencesToFirestore,
+  loadUserPreferencesFromFirestore,
+  flushPendingPreferencesSave,
   subscribeToUserPreferences,
   User,
 } from './services/firebase';
 
-const INITIAL_FAVORITES = ['cope', 'cadena-ser', 'onda-cero', 'rock-fm'];
+const INITIAL_FAVORITES: string[] = [];
 const EMPTY_ALARMS: never[] = [];
+
+// Per-user local storage key helpers
+const getFavsStorageKey = (userId?: string | null) =>
+  userId ? `radiostream_favs_${userId}` : 'radiostream_favs_guest';
+
+const getFavObjsStorageKey = (userId?: string | null) =>
+  userId ? `radiostream_fav_objects_${userId}` : 'radiostream_fav_objects_guest';
 
 export default function App() {
   const [stations, setStations] = useState<RadioStation[]>(INITIAL_STATIONS);
@@ -40,6 +51,15 @@ export default function App() {
   const [playbackError, setPlaybackError] = useState<string>('');
   const [volume, setVolume] = useState<number>(0.8);
   const [currentTab, setCurrentTab] = useState<TabType>('descubrir');
+  const previousTabRef = useRef<TabType>('descubrir');
+
+  const handleSelectTab = (tab: TabType) => {
+    if (currentTab !== 'coche') {
+      previousTabRef.current = currentTab;
+    }
+    setCurrentTab(tab);
+  };
+
   const [activeSource, setActiveSource] = useState<'radio' | 'drive'>('radio');
   const [currentDriveTrack, setCurrentDriveTrack] = useState<DriveAudioFile | null>(null);
   const [drivePlaybackStatus, setDrivePlaybackStatus] = useState<DrivePlaybackStatus>('idle');
@@ -53,9 +73,29 @@ export default function App() {
   const [tuningStation, setTuningStation] = useState<RadioStation | null>(null);
   const tuningTimeoutRef = useRef<number | null>(null);
 
-  // User Auth state
-  const [user, setUser] = useState<User | null>(null);
+  // User Auth state (Firebase user or paired Tesla user)
+  const initialPairedUser = (() => {
+    try {
+      const saved = localStorage.getItem('radiostream_paired_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  })();
+
+  const [user, setUser] = useState<User | any | null>(initialPairedUser);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  // Google Drive connection status & subscription
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => googleDriveService.hasToken());
+
+  useEffect(() => {
+    const unsub = googleDriveService.onTokenChange(hasTok => {
+      setIsDriveConnected(hasTok);
+    });
+    return unsub;
+  }, []);
+
+  const pendingFavoriteStationRef = useRef<RadioStation | null>(null);
 
   // PWA Install prompt state
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -89,32 +129,53 @@ export default function App() {
     setDeferredPrompt(null);
   };
 
-  // Favorites IDs state
+  // Favorites IDs state: strictly empty if not connected to Google Drive
   const [favorites, setFavorites] = useState<string[]>(() => {
+    if (!googleDriveService.hasToken() && !initialPairedUser) {
+      return [];
+    }
     try {
-      const saved = localStorage.getItem('radiostream_favs');
-      return saved ? JSON.parse(saved) : INITIAL_FAVORITES;
+      const userKey = getFavsStorageKey(initialPairedUser?.uid);
+      const savedUserFavs = localStorage.getItem(userKey);
+      if (savedUserFavs) {
+        const parsed = JSON.parse(savedUserFavs);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return [];
     } catch {
-      return INITIAL_FAVORITES;
+      return [];
     }
   });
 
-  // Cached full station objects for favorites (so stations found in search or live API are preserved)
+  // Cached full station objects for favorites: strictly empty if not connected to Google Drive
   const [favoriteStationsMap, setFavoriteStationsMap] = useState<Record<string, RadioStation>>(() => {
+    if (!googleDriveService.hasToken() && !initialPairedUser) {
+      return {};
+    }
     try {
-      const savedMap = localStorage.getItem('radiostream_fav_objects');
-      if (savedMap) {
-        return JSON.parse(savedMap);
+      const userObjsKey = getFavObjsStorageKey(initialPairedUser?.uid);
+      const savedUserObjs = localStorage.getItem(userObjsKey);
+      if (savedUserObjs) {
+        const parsed = JSON.parse(savedUserObjs);
+        if (parsed && typeof parsed === 'object') return parsed;
       }
     } catch {
       // ignore
     }
-    const initialMap: Record<string, RadioStation> = {};
-    INITIAL_STATIONS.forEach(st => {
-      initialMap[st.id] = st;
-    });
-    return initialMap;
+    return {};
   });
+
+  const nextStationRef = useRef<() => void>(() => {});
+  const prevStationRef = useRef<() => void>(() => {});
+
+  // Initialize Tesla background audio persistence and steering wheel navigation
+  useEffect(() => {
+    teslaBackgroundService.init();
+    audioEngine.setStationNavigationHandlers(
+      () => nextStationRef.current(),
+      () => prevStationRef.current()
+    );
+  }, []);
 
   // Listen to Audio Engine status changes
   useEffect(() => {
@@ -153,16 +214,218 @@ export default function App() {
     };
   }, [activeSource]);
 
-  // Listen to Firebase Auth state & Redirect Result
+  // Protection refs to prevent race conditions & unwanted clobbering of remote Firestore data
+  const isInitialUserLoadRef = useRef<boolean>(false);
+  const isIncomingUpdateRef = useRef<boolean>(false);
+  const currentLoadedUserIdRef = useRef<string | null>(null);
+
+  /**
+   * Loads user preferences from cache & Firestore cleanly, without overwriting cloud data
+   */
+  const loadUserAccountPreferences = async (
+    targetUser: { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
+  ) => {
+    if (!targetUser || !targetUser.uid) return;
+    const userId = targetUser.uid;
+
+    if (currentLoadedUserIdRef.current === userId && !isInitialUserLoadRef.current) {
+      return;
+    }
+
+    currentLoadedUserIdRef.current = userId;
+    isInitialUserLoadRef.current = true;
+    setIsSyncing(true);
+
+    try {
+      const userFavsKey = getFavsStorageKey(userId);
+      const userObjsKey = getFavObjsStorageKey(userId);
+
+      // 1. Instant local cache retrieval for this specific user
+      const cachedFavsRaw = localStorage.getItem(userFavsKey);
+      const cachedObjsRaw = localStorage.getItem(userObjsKey);
+
+      if (cachedFavsRaw) {
+        try {
+          const parsed = JSON.parse(cachedFavsRaw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setFavorites(parsed);
+          }
+        } catch {}
+      }
+      if (cachedObjsRaw) {
+        try {
+          const parsedObjs = JSON.parse(cachedObjsRaw);
+          if (parsedObjs && typeof parsedObjs === 'object' && Object.keys(parsedObjs).length > 0) {
+            setFavoriteStationsMap(parsedObjs);
+          }
+        } catch {}
+      }
+
+      // 2. Fetch ground-truth preferences from Firestore database
+      const remoteData = await loadUserPreferencesFromFirestore(userId);
+
+      if (remoteData && Array.isArray(remoteData.favorites)) {
+        console.log(`[Firestore] Favoritas recuperadas exitosamente para ${targetUser.email || userId}:`, remoteData.favorites);
+        isIncomingUpdateRef.current = true;
+        setFavorites(remoteData.favorites);
+
+        let mergedMap: Record<string, RadioStation> = {};
+        if (Array.isArray(remoteData.favoriteStationObjects) && remoteData.favoriteStationObjects.length > 0) {
+          remoteData.favoriteStationObjects.forEach((st: RadioStation) => {
+            if (st && st.id) mergedMap[st.id] = st;
+          });
+        } else {
+          remoteData.favorites.forEach((id: string) => {
+            const found = stations.find(s => s.id === id) || INITIAL_STATIONS.find(s => s.id === id);
+            if (found) mergedMap[id] = found;
+          });
+        }
+
+        setFavoriteStationsMap(prev => {
+          const next = { ...prev, ...mergedMap };
+          try {
+            localStorage.setItem(userObjsKey, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+
+        try {
+          localStorage.setItem(userFavsKey, JSON.stringify(remoteData.favorites));
+          localStorage.setItem('radiostream_favs', JSON.stringify(remoteData.favorites));
+          localStorage.setItem('radiostream_fav_objects', JSON.stringify(mergedMap));
+        } catch {}
+
+        if (pendingFavoriteStationRef.current) {
+          const pendingStation = pendingFavoriteStationRef.current;
+          pendingFavoriteStationRef.current = null;
+          setFavorites(prevFavs => {
+            if (!prevFavs.includes(pendingStation.id)) {
+              return [...prevFavs, pendingStation.id];
+            }
+            return prevFavs;
+          });
+          setFavoriteStationsMap(prevMap => ({
+            ...prevMap,
+            [pendingStation.id]: pendingStation,
+          }));
+        }
+
+        setTimeout(() => {
+          isIncomingUpdateRef.current = false;
+        }, 400);
+      } else {
+        // First time this user logs in and has no document in Firestore:
+        console.log(`[Firestore] Nuevo usuario ${userId} sin documento previo.`);
+        let initialFavsToSave: string[] = [];
+        let initialObjsToSave: RadioStation[] = [];
+
+        if (pendingFavoriteStationRef.current) {
+          const pendingStation = pendingFavoriteStationRef.current;
+          pendingFavoriteStationRef.current = null;
+          initialFavsToSave = [pendingStation.id];
+          initialObjsToSave = [pendingStation];
+          setFavorites(initialFavsToSave);
+          setFavoriteStationsMap({ [pendingStation.id]: pendingStation });
+        } else {
+          setFavorites([]);
+          setFavoriteStationsMap({});
+        }
+
+        await saveUserPreferencesToFirestore(
+          userId,
+          {
+            favorites: initialFavsToSave,
+            favoriteStationObjects: initialObjsToSave,
+            alarms: EMPTY_ALARMS,
+          },
+          true
+        );
+
+        try {
+          localStorage.setItem(userFavsKey, JSON.stringify(initialFavsToSave));
+          localStorage.setItem(userObjsKey, JSON.stringify(initialObjsToSave));
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('[Firestore] Error al cargar preferencias del usuario:', err);
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => {
+        isInitialUserLoadRef.current = false;
+      }, 400);
+    }
+  };
+
+  // Listen to Firebase Auth state & Redirect Result + Auto-recover paired Tesla session
   useEffect(() => {
     handleRedirectAuth().then(redirectUser => {
       if (redirectUser) {
         setUser(redirectUser);
+        try {
+          localStorage.setItem(
+            'radiostream_paired_user',
+            JSON.stringify({
+              uid: redirectUser.uid,
+              email: redirectUser.email || '',
+              displayName: redirectUser.displayName || '',
+              photoURL: redirectUser.photoURL || '',
+            })
+          );
+        } catch {}
+        loadUserAccountPreferences(redirectUser);
       }
     });
 
     const unsubscribeAuth = onAuthStateChanged(auth, currentUser => {
-      setUser(currentUser);
+      if (currentUser) {
+        setUser(currentUser);
+        try {
+          localStorage.setItem(
+            'radiostream_paired_user',
+            JSON.stringify({
+              uid: currentUser.uid,
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              photoURL: currentUser.photoURL || '',
+            })
+          );
+        } catch {}
+        loadUserAccountPreferences(currentUser);
+      } else {
+        currentLoadedUserIdRef.current = null;
+        // If no direct Firebase Auth session on this browser, check saved paired Tesla session
+        const saved = localStorage.getItem('radiostream_paired_user');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            setUser(parsed);
+            if (parsed && parsed.uid) {
+              loadUserAccountPreferences(parsed);
+            }
+            return;
+          } catch {}
+        }
+
+        // If an active Google Drive token exists (e.g. connected via QR pairing), recover user info
+        if (googleDriveService.hasToken()) {
+          googleDriveService.fetchUserInfo().then(info => {
+            if (info && (info.email || info.displayName)) {
+              const recoveredUser = {
+                uid: `paired-${info.email || Date.now()}`,
+                email: info.email || '',
+                displayName: info.displayName || info.email?.split('@')[0] || 'Tesla User',
+                photoURL: info.photoURL || '',
+                isPairedViaTesla: true,
+              };
+              try {
+                localStorage.setItem('radiostream_paired_user', JSON.stringify(recoveredUser));
+              } catch {}
+              setUser(recoveredUser);
+              loadUserAccountPreferences(recoveredUser);
+            }
+          });
+        }
+      }
     });
     return () => unsubscribeAuth();
   }, []);
@@ -178,20 +441,20 @@ export default function App() {
     }
   }, []);
 
-  // Listen to Firestore preferences when logged in
-  const isIncomingUpdateRef = useRef(false);
-
+  // Listen to Firestore & Paired Tesla preferences in real-time
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) return;
 
-    setIsSyncing(true);
-    const unsubscribeFirestore = subscribeToUserPreferences(user.uid, data => {
+    const currentUserId = user.uid;
+    const syncKey = user.email || currentUserId;
+
+    const handleIncomingData = (data: any) => {
+      if (isInitialUserLoadRef.current) return;
       setIsSyncing(false);
-      if (data) {
+      if (data && Array.isArray(data.favorites)) {
         isIncomingUpdateRef.current = true;
-        if (Array.isArray(data.favorites)) {
-          setFavorites(data.favorites);
-        }
+        setFavorites(data.favorites);
+
         if (Array.isArray(data.favoriteStationObjects) && data.favoriteStationObjects.length > 0) {
           setFavoriteStationsMap(prev => {
             const next = { ...prev };
@@ -199,39 +462,77 @@ export default function App() {
               if (st && st.id) next[st.id] = st;
             });
             try {
+              localStorage.setItem(getFavObjsStorageKey(currentUserId), JSON.stringify(next));
               localStorage.setItem('radiostream_fav_objects', JSON.stringify(next));
-            } catch {
-              // ignore
-            }
+            } catch {}
             return next;
           });
         }
+
+        try {
+          localStorage.setItem(getFavsStorageKey(currentUserId), JSON.stringify(data.favorites));
+          localStorage.setItem('radiostream_favs', JSON.stringify(data.favorites));
+        } catch {}
+
         setTimeout(() => {
           isIncomingUpdateRef.current = false;
         }, 300);
       }
-    });
+    };
 
-    return () => unsubscribeFirestore();
-  }, [user]);
+    let unsubDirect = () => {};
+    if (auth.currentUser && auth.currentUser.uid === currentUserId) {
+      unsubDirect = subscribeToUserPreferences(currentUserId, handleIncomingData);
+    }
 
-  // Persist favorites to local storage & Firestore
+    const unsubPaired = teslaPairingService.subscribeToPairedPreferences(syncKey, handleIncomingData);
+
+    return () => {
+      unsubDirect();
+      unsubPaired();
+    };
+  }, [user?.uid]);
+
+  // Persist favorites to local storage & Firestore / Tesla paired sync
   useEffect(() => {
+    const currentUserId = user?.uid;
+    const favsKey = getFavsStorageKey(currentUserId);
+    const objsKey = getFavObjsStorageKey(currentUserId);
+
     try {
+      localStorage.setItem(favsKey, JSON.stringify(favorites));
+      localStorage.setItem(objsKey, JSON.stringify(favoriteStationsMap));
       localStorage.setItem('radiostream_favs', JSON.stringify(favorites));
       localStorage.setItem('radiostream_fav_objects', JSON.stringify(favoriteStationsMap));
     } catch {
       // ignore
     }
 
-    if (user && !isIncomingUpdateRef.current) {
-      saveUserPreferencesToFirestore(user.uid, {
-        favorites,
-        favoriteStationObjects: Object.values(favoriteStationsMap),
-        alarms: EMPTY_ALARMS,
-      }).catch(err => console.warn('Firestore sync background notice:', err));
+    // Do NOT write to Firestore if we are loading user preferences or applying a remote snapshot
+    if (isInitialUserLoadRef.current || isIncomingUpdateRef.current) {
+      return;
     }
-  }, [favorites, favoriteStationsMap, user]);
+
+    if (user && currentUserId) {
+      const syncKey = user.email || currentUserId;
+      const favObjects: RadioStation[] = Object.values(favoriteStationsMap);
+
+      if (auth.currentUser && auth.currentUser.uid === currentUserId) {
+        saveUserPreferencesToFirestore(currentUserId, {
+          favorites,
+          favoriteStationObjects: favObjects,
+          alarms: EMPTY_ALARMS,
+        }).catch(err => console.warn('Firestore sync direct notice:', err));
+      }
+
+      teslaPairingService
+        .savePairedPreferences(syncKey, {
+          favorites,
+          favoriteStationObjects: favObjects,
+        })
+        .catch(err => console.warn('Tesla paired sync notice:', err));
+    }
+  }, [favorites, favoriteStationsMap, user?.uid]);
 
   // Audio volume sync
   useEffect(() => {
@@ -254,11 +555,8 @@ export default function App() {
     try {
       const loggedUser = await signInWithGoogle();
       if (loggedUser) {
-        await saveUserPreferencesToFirestore(loggedUser.uid, {
-          favorites,
-          favoriteStationObjects: Object.values(favoriteStationsMap),
-          alarms: EMPTY_ALARMS,
-        });
+        setUser(loggedUser);
+        await loadUserAccountPreferences(loggedUser);
       }
     } catch (err: any) {
       console.warn('Login error, opening pairing modal fallback:', err);
@@ -267,12 +565,32 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    setIsSyncing(true);
     try {
+      if (user && auth.currentUser) {
+        await flushPendingPreferencesSave(user.uid);
+      }
       await logOutUser();
-      localStorage.removeItem('radiostream_drive_folder_id');
-      googleDriveService.clearAccessToken();
     } catch (err) {
       console.error('Logout error:', err);
+    } finally {
+      localStorage.removeItem('radiostream_drive_folder_id');
+      localStorage.removeItem('radiostream_paired_user');
+      googleDriveService.clearAccessToken();
+      setUser(null);
+      currentLoadedUserIdRef.current = null;
+
+      // Cleanly clear favorites when disconnected from Drive
+      try {
+        localStorage.removeItem('radiostream_favs_guest');
+        localStorage.removeItem('radiostream_fav_objects_guest');
+        localStorage.removeItem('radiostream_favs');
+        localStorage.removeItem('radiostream_fav_objects');
+      } catch {}
+
+      setFavorites([]);
+      setFavoriteStationsMap({});
+      setIsSyncing(false);
     }
   };
 
@@ -289,7 +607,7 @@ export default function App() {
       return prev;
     });
 
-    if (favorites.includes(station.id)) {
+    if (isDriveConnected && favorites.includes(station.id)) {
       setFavoriteStationsMap(prev => ({
         ...prev,
         [station.id]: station,
@@ -361,6 +679,9 @@ export default function App() {
     handleTuneToStation(list[nextIndex]);
   };
 
+  nextStationRef.current = handleNextStation;
+  prevStationRef.current = handlePrevStation;
+
   // Favorite toggle handler supporting both ID and full station object
   const handleToggleFavorite = (
     stationOrId: string | RadioStation,
@@ -373,6 +694,15 @@ export default function App() {
       favoriteStationsMap[stationId] ||
       stations.find(s => s.id === stationId) ||
       INITIAL_STATIONS.find(s => s.id === stationId);
+
+    // If not connected to Drive, prompt Google login / Drive connection
+    if (!googleDriveService.hasToken()) {
+      if (stationObj) {
+        pendingFavoriteStationRef.current = stationObj;
+      }
+      handleLoginWithGoogle();
+      return;
+    }
 
     setFavorites(prev => {
       const isFav = prev.includes(stationId);
@@ -388,18 +718,39 @@ export default function App() {
           nextMap[stationId] = stationObj;
         }
 
+        const currentUserId = user?.uid;
+        const favObjsList: RadioStation[] = Object.values(nextMap) as RadioStation[];
+
+        // Save immediately to user-specific localStorage cache
         try {
+          localStorage.setItem(getFavsStorageKey(currentUserId), JSON.stringify(nextFavorites));
+          localStorage.setItem(getFavObjsStorageKey(currentUserId), JSON.stringify(nextMap));
+          localStorage.setItem('radiostream_favs', JSON.stringify(nextFavorites));
           localStorage.setItem('radiostream_fav_objects', JSON.stringify(nextMap));
         } catch {
           // ignore
         }
 
-        if (user && !isIncomingUpdateRef.current) {
-          saveUserPreferencesToFirestore(user.uid, {
+        // Save immediately to Firestore if user is authenticated with Firebase
+        if (currentUserId && auth.currentUser && auth.currentUser.uid === currentUserId) {
+          saveUserPreferencesToFirestore(
+            currentUserId,
+            {
+              favorites: nextFavorites,
+              favoriteStationObjects: favObjsList,
+              alarms: EMPTY_ALARMS,
+            },
+            true // Immediate write to prevent loss on fast logout
+          ).catch(err => console.warn('[Firestore] Error guardando favoritas:', err));
+        }
+
+        // Also sync Tesla pairing if session is active
+        if (user) {
+          const syncKey = user.email || currentUserId;
+          teslaPairingService.savePairedPreferences(syncKey, {
             favorites: nextFavorites,
-            favoriteStationObjects: Object.values(nextMap),
-            alarms: EMPTY_ALARMS,
-          }).catch(console.error);
+            favoriteStationObjects: favObjsList,
+          }).catch(() => {});
         }
 
         return nextMap;
@@ -410,6 +761,9 @@ export default function App() {
   };
 
   const favoriteStationObjects = useMemo(() => {
+    if (!isDriveConnected) {
+      return [];
+    }
     return favorites
       .map(id => {
         return (
@@ -419,7 +773,21 @@ export default function App() {
         );
       })
       .filter((s): s is RadioStation => Boolean(s));
-  }, [favorites, favoriteStationsMap, stations]);
+  }, [isDriveConnected, favorites, favoriteStationsMap, stations]);
+
+  // Synchronize favorites array IDs with valid station objects so counts never desync
+  useEffect(() => {
+    if (!isDriveConnected) return;
+    const validIds = favoriteStationObjects.map(s => s.id);
+    if (validIds.length > 0 && (favorites.length !== validIds.length || favorites.some((id, i) => id !== validIds[i]))) {
+      setFavorites(validIds);
+      const currentUserId = user?.uid;
+      try {
+        localStorage.setItem(getFavsStorageKey(currentUserId), JSON.stringify(validIds));
+        localStorage.setItem('radiostream_favs', JSON.stringify(validIds));
+      } catch {}
+    }
+  }, [isDriveConnected, favoriteStationObjects, favorites, user?.uid]);
 
   if (mobilePairCode) {
     return (
@@ -441,7 +809,7 @@ export default function App() {
       {/* Top App Bar with Google Login / Logout & Live API Badge */}
       <TopAppBar
         currentTab={currentTab}
-        onSelectTab={tab => setCurrentTab(tab)}
+        onSelectTab={handleSelectTab}
         onOpenSettings={() => setIsSettingsOpen(true)}
         lang={lang}
         onToggleLang={() => setLang(l => (l === 'ES' ? 'EN' : 'ES'))}
@@ -457,13 +825,13 @@ export default function App() {
         {/* Desktop Side Navigation */}
         <SideNav
           currentTab={currentTab}
-          onSelectTab={tab => setCurrentTab(tab)}
-          favoritesCount={favorites.length}
+          onSelectTab={handleSelectTab}
+          favoritesCount={favoriteStationObjects.length}
         />
 
-        {/* Main Content Area */}
+        {/* Main Content Area - Views stay persistent in DOM to prevent reload/waiting */}
         <main className="flex-1 p-3 sm:p-4 lg:p-6 w-full max-w-[1920px] mx-auto pb-36 md:pb-28">
-          {currentTab === 'descubrir' && (
+          <div className={currentTab === 'descubrir' ? 'block' : 'hidden'}>
             <DiscoverView
               currentStation={currentStation}
               isPlaying={isPlaying}
@@ -471,15 +839,15 @@ export default function App() {
               errorMessage={playbackError}
               onSelectStation={st => handleTuneToStation(st)}
               onTogglePlay={handleTogglePlay}
-              favorites={favorites}
+              favorites={isDriveConnected ? favorites : []}
               onToggleFavorite={handleToggleFavorite}
               initialStations={stations}
               onInstallPWA={handleInstallPWA}
               isInstallable={isInstallable}
             />
-          )}
+          </div>
 
-          {currentTab === 'favoritas' && (
+          <div className={currentTab === 'favoritas' ? 'block' : 'hidden'}>
             <FavoritesView
               favoriteStations={favoriteStationObjects}
               currentStation={currentStation}
@@ -489,13 +857,15 @@ export default function App() {
               onSelectStation={st => handleTuneToStation(st)}
               onTogglePlay={handleTogglePlay}
               onToggleFavorite={handleToggleFavorite}
-              onNavigateToDiscover={() => setCurrentTab('descubrir')}
+              onNavigateToDiscover={() => handleSelectTab('descubrir')}
+              isDriveConnected={isDriveConnected}
+              onConnectDrive={handleLoginWithGoogle}
             />
-          )}
+          </div>
 
-          {currentTab === 'drive' && (
+          <div className={currentTab === 'drive' ? 'block' : 'hidden'}>
             <DriveMusicView
-              onSwitchToRadio={() => setCurrentTab('descubrir')}
+              onSwitchToRadio={() => handleSelectTab('descubrir')}
               activeSource={activeSource}
               onActivateDriveSource={() => {
                 audioEngine.stop();
@@ -504,8 +874,9 @@ export default function App() {
               }}
               user={user}
               onOpenTeslaPairing={() => setIsTeslaPairingModalOpen(true)}
+              onDisconnect={handleLogout}
             />
-          )}
+          </div>
         </main>
       </div>
 
@@ -542,12 +913,30 @@ export default function App() {
               handlePrevStation();
             }
           }}
-          onExitCarMode={() => setCurrentTab('descubrir')}
+          onExitCarMode={() => setCurrentTab(previousTabRef.current || 'descubrir')}
           volume={volume}
           onVolumeChange={val => {
             setVolume(val);
             audioEngine.setVolume(val);
             driveAudioEngine.setVolume(val);
+          }}
+          onConnectDrive={() => {
+            if (!googleDriveService.hasToken()) {
+              handleLoginWithGoogle();
+            } else {
+              handleSelectTab('drive');
+            }
+          }}
+          onSelectDriveTrack={(track, index) => {
+            setActiveSource('drive');
+            const token = googleDriveService.getToken();
+            const playlist = driveAudioEngine.getPlaylist();
+            if (playlist && playlist.length > 0) {
+              driveAudioEngine.setPlaylist(playlist, index);
+            }
+            if (token) {
+              driveAudioEngine.playTrack(track, token);
+            }
           }}
         />
       )}
@@ -583,14 +972,14 @@ export default function App() {
           audioEngine.setVolume(val);
           driveAudioEngine.setVolume(val);
         }}
-        isFavorite={favorites.includes(currentStation.id)}
+        isFavorite={isDriveConnected && favoriteStationObjects.some(s => s.id === currentStation.id)}
         onToggleFavorite={handleToggleFavorite}
       />
 
       {/* Mobile Bottom Navigation Bar */}
       <BottomNavBar
         currentTab={currentTab}
-        onSelectTab={tab => setCurrentTab(tab)}
+        onSelectTab={handleSelectTab}
       />
 
       {/* Tuning Modal */}
@@ -604,8 +993,31 @@ export default function App() {
       <TeslaPairingModal
         isOpen={isTeslaPairingModalOpen}
         onClose={() => setIsTeslaPairingModalOpen(false)}
-        onSuccess={() => {
-          setCurrentTab('drive');
+        onSuccess={(pairedUserData, syncedFavs, syncedObjs) => {
+          if (pairedUserData) {
+            setUser(pairedUserData);
+          }
+          if (Array.isArray(syncedFavs) && syncedFavs.length > 0) {
+            setFavorites(syncedFavs);
+            try {
+              localStorage.setItem(getFavsStorageKey(pairedUserData?.uid), JSON.stringify(syncedFavs));
+              localStorage.setItem('radiostream_favs', JSON.stringify(syncedFavs));
+            } catch {}
+          }
+          if (Array.isArray(syncedObjs) && syncedObjs.length > 0) {
+            setFavoriteStationsMap(prev => {
+              const next = { ...prev };
+              syncedObjs.forEach((st: RadioStation) => {
+                if (st && st.id) next[st.id] = st;
+              });
+              try {
+                localStorage.setItem(getFavObjsStorageKey(pairedUserData?.uid), JSON.stringify(next));
+                localStorage.setItem('radiostream_fav_objects', JSON.stringify(next));
+              } catch {}
+              return next;
+            });
+          }
+          handleSelectTab('drive');
         }}
         userEmail={user?.email || undefined}
       />
@@ -616,7 +1028,7 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
         lang={lang}
         onToggleLang={() => setLang(l => (l === 'ES' ? 'EN' : 'ES'))}
-        favoritesCount={favorites.length}
+        favoritesCount={favoriteStationObjects.length}
         alarmsCount={0}
       />
     </div>

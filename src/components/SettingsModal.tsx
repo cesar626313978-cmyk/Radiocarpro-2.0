@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { audioEngine } from '../services/audioEngine';
+import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [savedToast, setSavedToast] = useState(false);
 
   const [sleepSecondsLeft, setSleepSecondsLeft] = useState(() => audioEngine.getSleepTimerSeconds());
+  const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -263,6 +265,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           </div>
 
+          {/* Privacy Policy Link */}
+          <div className="bg-[#131313] p-3.5 border-2 border-black flex justify-between items-center">
+            <div>
+              <div className="font-mono-tech text-xs text-white font-bold uppercase flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm text-[#4edea3]">verified_user</span>
+                <span>Política de Privacidad y Seguridad</span>
+              </div>
+              <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
+                Permisos Google Drive, búfer offline IndexedDB y protección de datos.
+              </div>
+            </div>
+            <button
+              onClick={() => setShowPrivacyModal(true)}
+              className="neo-button bg-[#062436] hover:bg-[#073048] text-cyan-300 border-2 border-cyan-500/60 px-3.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 cursor-pointer shrink-0 ml-3"
+            >
+              <span>Ver</span>
+              <span className="material-symbols-outlined text-sm">open_in_new</span>
+            </button>
+          </div>
+
           {/* System Specs Readout */}
           <div className="bg-[#0e0e0e] p-3 border-2 border-black font-mono-tech text-[10px] text-[#86948a] flex flex-col gap-1">
             <div className="text-white font-bold">ESPECIFICACIONES DEL SISTEMA:</div>
@@ -289,6 +311,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
       </div>
+
+      <PrivacyPolicyModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
     </div>
   );
 };

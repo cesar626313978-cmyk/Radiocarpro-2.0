@@ -11,6 +11,8 @@ interface FavoritesViewProps {
   onTogglePlay: () => void;
   onToggleFavorite: (id: string, station?: RadioStation) => void;
   onNavigateToDiscover: () => void;
+  isDriveConnected?: boolean;
+  onConnectDrive?: () => void;
 }
 
 export const FavoritesView: React.FC<FavoritesViewProps> = ({
@@ -22,6 +24,8 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   onTogglePlay,
   onToggleFavorite,
   onNavigateToDiscover,
+  isDriveConnected = false,
+  onConnectDrive,
 }) => {
   return (
     <div className="flex flex-col gap-2.5 sm:gap-3.5 w-full">
@@ -43,13 +47,41 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
         </div>
 
         {/* Sync Status Badge */}
-        <div className="flex items-center gap-1.5 bg-[#1A1A1A] px-2 py-0.5 border border-black text-[10px] font-mono-tech text-[#4edea3] font-bold">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
-          <span>Sincronizado</span>
-        </div>
+        {isDriveConnected ? (
+          <div className="flex items-center gap-1.5 bg-[#1A1A1A] px-2 py-0.5 border border-black text-[10px] font-mono-tech text-[#4edea3] font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
+            <span>Sincronizado en Drive</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 bg-[#1A1A1A] px-2 py-0.5 border border-black text-[10px] font-mono-tech text-[#f59e0b] font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
+            <span>Desconectado de Drive</span>
+          </div>
+        )}
       </div>
 
-      {favoriteStations.length === 0 ? (
+      {!isDriveConnected ? (
+        <div className="bg-[#1A1A1A] border-3 border-black p-8 sm:p-12 text-center flex flex-col items-center justify-center neo-shadow">
+          <div className="w-16 h-16 rounded-full bg-[#f59e0b]/10 border-2 border-[#f59e0b]/40 flex items-center justify-center mb-4 text-[#f59e0b]">
+            <span className="material-symbols-outlined text-3xl">hard_drive</span>
+          </div>
+          <h3 className="font-black text-xl text-white uppercase mb-2">
+            Lista de Favoritas Vacía
+          </h3>
+          <p className="text-[#bbcabf] font-mono-tech text-xs max-w-md mb-6 leading-relaxed">
+            La lista de favoritas está vacía porque no estás conectado a Google Drive. Inicia sesión con tu cuenta de Google para guardar, cargar y sincronizar tus emisoras favoritas en la nube y en tu vehículo.
+          </p>
+          {onConnectDrive && (
+            <button
+              onClick={onConnectDrive}
+              className="neo-button bg-[#4edea3] text-[#003824] px-6 py-3 font-mono-tech text-xs font-black uppercase hover:bg-[#38c98e] flex items-center gap-2 cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <span className="material-symbols-outlined text-base">cloud_sync</span>
+              <span>Conectar Google Drive</span>
+            </button>
+          )}
+        </div>
+      ) : favoriteStations.length === 0 ? (
         <div className="bg-[#1A1A1A] border-3 border-black p-12 text-center flex flex-col items-center justify-center neo-shadow">
           <span className="material-symbols-outlined text-5xl text-[#86948a] mb-3">
             favorite_border

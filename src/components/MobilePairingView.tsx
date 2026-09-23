@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { teslaPairingService } from '../services/teslaPairingService';
-import { auth, googleProvider } from '../services/firebase';
+import { auth, googleProvider, loadUserPreferencesFromFirestore } from '../services/firebase';
 import { signInWithPopup, signInWithRedirect, GoogleAuthProvider } from 'firebase/auth';
 
 interface MobilePairingViewProps {
@@ -37,10 +37,33 @@ export const MobilePairingView: React.FC<MobilePairingViewProps> = ({ pairCode, 
         throw new Error('No se recibió el token de acceso de Google Drive. Asegúrate de conceder permisos de lectura.');
       }
 
+      let userPrefs = null;
+      try {
+        userPrefs = await loadUserPreferencesFromFirestore(result.user.uid);
+      } catch (e) {
+        console.warn('Could not load user prefs for pairing:', e);
+      }
+
+      const syncKey = result.user.email || result.user.uid;
+      const favs = userPrefs?.favorites || [];
+      const favObjs = userPrefs?.favoriteStationObjects || [];
+
+      try {
+        await teslaPairingService.savePairedPreferences(syncKey, {
+          favorites: favs,
+          favoriteStationObjects: favObjs,
+        });
+      } catch (e) {
+        console.warn('Could not save paired preferences initial sync:', e);
+      }
+
       await teslaPairingService.completeSession(pairCode, token, {
+        uid: result.user.uid,
         email: result.user.email || undefined,
         displayName: result.user.displayName || undefined,
         photoURL: result.user.photoURL || undefined,
+        favorites: favs,
+        favoriteStationObjects: favObjs,
       });
 
       setIsSuccess(true);

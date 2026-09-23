@@ -14,6 +14,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocFromServer,
   onSnapshot,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -27,6 +28,18 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with specific database ID
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Test Firestore connection on boot (Firebase integration requirement)
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration: client is offline.');
+    }
+  }
+}
+testConnection();
 
 import { googleDriveService } from './googleDriveService';
 
@@ -94,7 +107,7 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.warn('Firestore Warning: ', JSON.stringify(errInfo));
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
 }
 
 /**
@@ -182,9 +195,68 @@ export async function logOutUser(): Promise<void> {
 }
 
 let saveDebounceTimer: number | null = null;
+let pendingSave: {
+  userId: string;
+  data: {
+    favorites: string[];
+    favoriteStationObjects?: RadioStation[];
+    alarms: Alarm[];
+    totalMinutesListened?: number;
+    settings?: Record<string, unknown>;
+  };
+} | null = null;
+
+async function executeFirestoreSave(
+  userId: string,
+  data: {
+    favorites: string[];
+    favoriteStationObjects?: RadioStation[];
+    alarms: Alarm[];
+    totalMinutesListened?: number;
+    settings?: Record<string, unknown>;
+  }
+): Promise<void> {
+  if (isQuotaExceeded || !userId) return;
+  const path = `users/${userId}`;
+  try {
+    const userRef = doc(db, 'users', userId);
+    await setDoc(
+      userRef,
+      {
+        userId,
+        email: auth.currentUser?.email || '',
+        displayName: auth.currentUser?.displayName || '',
+        photoURL: auth.currentUser?.photoURL || '',
+        favorites: data.favorites || [],
+        favoriteStationObjects: data.favoriteStationObjects || [],
+        alarms: data.alarms || [],
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    console.log(`[Firestore] Sincronización guardada exitosamente (${data.favorites.length} favoritas) para UID: ${userId}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
 
 /**
- * Sync user preferences (Favorites, Alarms) to Firestore with debouncing and quota protection
+ * Flush any pending preferences save immediately and await completion (used before sign out)
+ */
+export async function flushPendingPreferencesSave(userId?: string): Promise<void> {
+  if (saveDebounceTimer) {
+    window.clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = null;
+  }
+  if (pendingSave) {
+    const payload = pendingSave;
+    pendingSave = null;
+    await executeFirestoreSave(userId || payload.userId, payload.data);
+  }
+}
+
+/**
+ * Sync user preferences (Favorites, Alarms) to Firestore with immediate option or debouncing
  */
 export async function saveUserPreferencesToFirestore(
   userId: string,
@@ -194,51 +266,56 @@ export async function saveUserPreferencesToFirestore(
     alarms: Alarm[];
     totalMinutesListened?: number;
     settings?: Record<string, unknown>;
-  }
-) {
+  },
+  immediate = false
+): Promise<void> {
   if (isQuotaExceeded || !userId) {
     return;
   }
 
   if (saveDebounceTimer) {
     window.clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = null;
   }
 
-  saveDebounceTimer = window.setTimeout(async () => {
-    const path = `users/${userId}`;
-    try {
-      const userRef = doc(db, 'users', userId);
-      await setDoc(
-        userRef,
-        {
-          userId,
-          email: auth.currentUser?.email || '',
-          displayName: auth.currentUser?.displayName || '',
-          photoURL: auth.currentUser?.photoURL || '',
-          favorites: data.favorites,
-          favoriteStationObjects: data.favoriteStationObjects || [],
-          alarms: data.alarms,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
-    }
-  }, 1000);
+  pendingSave = { userId, data };
+
+  if (immediate) {
+    pendingSave = null;
+    await executeFirestoreSave(userId, data);
+    return;
+  }
+
+  return new Promise<void>(resolve => {
+    saveDebounceTimer = window.setTimeout(async () => {
+      saveDebounceTimer = null;
+      if (pendingSave) {
+        const payload = pendingSave;
+        pendingSave = null;
+        await executeFirestoreSave(payload.userId, payload.data);
+      }
+      resolve();
+    }, 400);
+  });
 }
 
 /**
  * Load user preferences from Firestore
  */
-export async function loadUserPreferencesFromFirestore(userId: string) {
+export async function loadUserPreferencesFromFirestore(userId: string): Promise<{
+  favorites?: string[];
+  favoriteStationObjects?: RadioStation[];
+  alarms?: Alarm[];
+  updatedAt?: string;
+  [key: string]: any;
+} | null> {
   if (isQuotaExceeded || !userId) return null;
   const path = `users/${userId}`;
   try {
     const userRef = doc(db, 'users', userId);
     const snap = await getDoc(userRef);
     if (snap.exists()) {
-      return snap.data();
+      return snap.data() as any;
     }
     return null;
   } catch (error) {

@@ -7,6 +7,7 @@ export class GoogleDriveService {
   private accessToken: string | null = null;
   private tokenExpiryTime = 0;
   private tokenClient: any = null;
+  private tokenListeners: ((hasToken: boolean) => void)[] = [];
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -29,6 +30,25 @@ export class GoogleDriveService {
     return !!this.accessToken && Date.now() < this.tokenExpiryTime;
   }
 
+  public onTokenChange(listener: (hasToken: boolean) => void): () => void {
+    this.tokenListeners.push(listener);
+    try {
+      listener(this.hasToken());
+    } catch {}
+    return () => {
+      this.tokenListeners = this.tokenListeners.filter(l => l !== listener);
+    };
+  }
+
+  private notifyTokenChange() {
+    const current = this.hasToken();
+    this.tokenListeners.forEach(listener => {
+      try {
+        listener(current);
+      } catch {}
+    });
+  }
+
   public setAccessToken(token: string, expiresInMs = 3600 * 1000) {
     this.accessToken = token;
     this.tokenExpiryTime = Date.now() + expiresInMs - 300 * 1000;
@@ -38,6 +58,7 @@ export class GoogleDriveService {
         localStorage.setItem('radiostream_drive_token_expiry', String(this.tokenExpiryTime));
       } catch {}
     }
+    this.notifyTokenChange();
   }
 
   public clearAccessToken() {
@@ -49,12 +70,53 @@ export class GoogleDriveService {
         localStorage.removeItem('radiostream_drive_token_expiry');
       } catch {}
     }
+    this.notifyTokenChange();
   }
 
   public getToken(): string | null {
     if (this.hasToken()) {
       return this.accessToken;
     }
+    return null;
+  }
+
+  /**
+   * Fetches Google user profile using the active token
+   */
+  public async fetchUserInfo(): Promise<{ email?: string; displayName?: string; photoURL?: string } | null> {
+    const token = this.getToken();
+    if (!token) return null;
+
+    try {
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          email: data.email,
+          displayName: data.name || data.given_name,
+          photoURL: data.picture,
+        };
+      }
+    } catch {}
+
+    try {
+      const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          return {
+            email: data.user.emailAddress,
+            displayName: data.user.displayName,
+            photoURL: data.user.photoLink,
+          };
+        }
+      }
+    } catch {}
+
     return null;
   }
 

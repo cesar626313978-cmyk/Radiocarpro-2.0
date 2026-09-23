@@ -7,7 +7,7 @@ import { googleDriveService } from '../services/googleDriveService';
 interface TeslaPairingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (email?: string) => void;
+  onSuccess: (pairedUser: any, favorites?: string[], favoriteStationObjects?: any[]) => void;
   userEmail?: string;
 }
 
@@ -60,11 +60,24 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
           (data: TeslaPairingData) => {
             if (data.token) {
               googleDriveService.setAccessToken(data.token);
-              setPairedUser(data.userEmail || 'Cuenta Google');
+              setPairedUser(data.userDisplayName || data.userEmail || 'Cuenta Google');
+
+              const pairedUserData = {
+                uid: data.uid || `paired-${data.userEmail || Date.now()}`,
+                email: data.userEmail || '',
+                displayName: data.userDisplayName || (data.userEmail ? data.userEmail.split('@')[0] : 'Tesla User'),
+                photoURL: data.userPhoto || '',
+                isPairedViaTesla: true,
+              };
+
+              try {
+                localStorage.setItem('radiostream_paired_user', JSON.stringify(pairedUserData));
+              } catch {}
+
               setTimeout(() => {
-                onSuccess(data.userEmail);
+                onSuccess(pairedUserData, data.favorites, data.favoriteStationObjects);
                 onClose();
-              }, 1500);
+              }, 1200);
             }
           },
           err => {

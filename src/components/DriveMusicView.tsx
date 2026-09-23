@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DriveAudioFile, DrivePlaybackStatus } from '../types/drive';
 import { googleDriveService } from '../services/googleDriveService';
 import { driveAudioEngine } from '../services/driveAudioEngine';
@@ -9,8 +9,10 @@ interface DriveMusicViewProps {
   onSwitchToRadio: () => void;
   activeSource: 'radio' | 'drive';
   onActivateDriveSource: () => void;
-  user?: User | null;
-  onOpenTeslaPairing?: () => void;
+  user?: User | any | null;
+  onOpenCarPairing?: () => void;
+  onOpenTeslaPairing?: () => void; // compatibilidad
+  onDisconnect?: () => void;
 }
 
 export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
@@ -18,13 +20,21 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   activeSource,
   onActivateDriveSource,
   user,
+  onOpenCarPairing,
   onOpenTeslaPairing,
+  onDisconnect,
 }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const triggerCarPairing = onOpenCarPairing || onOpenTeslaPairing;
+  // Synchronous cache retrieval for instant 0ms rendering
+  const cachedInitial = driveCacheService.getCachedLibrarySync();
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => googleDriveService.hasToken());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [folderStatus, setFolderStatus] = useState<string>('Desconectado');
-  const [files, setFiles] = useState<DriveAudioFile[]>([]);
+  const [folderStatus, setFolderStatus] = useState<string>(
+    () => cachedInitial?.folderStatus || (googleDriveService.hasToken() ? 'Listo en memoria' : 'Desconectado')
+  );
+  const [files, setFiles] = useState<DriveAudioFile[]>(() => cachedInitial?.files || []);
   const [currentTrack, setCurrentTrack] = useState<DriveAudioFile | null>(null);
   const [playbackStatus, setPlaybackStatus] = useState<DrivePlaybackStatus>('idle');
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -44,18 +54,45 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     }
   });
 
-  const [subfolders, setSubfolders] = useState<{ id: string; name: string }[]>([]);
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>([]);
-  const [totalRecursiveFiles, setTotalRecursiveFiles] = useState<number>(0);
-  const [allRecursiveFiles, setAllRecursiveFiles] = useState<DriveAudioFile[]>([]);
-  const [loadProgress, setLoadProgress] = useState<number>(0);
+  const [subfolders, setSubfolders] = useState<{ id: string; name: string }[]>(() => cachedInitial?.subfolders || []);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(() => cachedInitial?.folderId || null);
+  const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>(() => cachedInitial?.folderStack || []);
+  const [totalRecursiveFiles, setTotalRecursiveFiles] = useState<number>(() => cachedInitial?.totalRecursiveFiles || 0);
+  const [allRecursiveFiles, setAllRecursiveFiles] = useState<DriveAudioFile[]>(() => cachedInitial?.allRecursiveFiles || []);
+  const [loadProgress, setLoadProgress] = useState<number>(() => (cachedInitial ? 100 : 0));
+  const [loadingSubfolderId, setLoadingSubfolderId] = useState<string | null>(null);
+  const [playingSubfolderId, setPlayingSubfolderId] = useState<string | null>(null);
+  const [activePlaylist, setActivePlaylist] = useState<DriveAudioFile[]>(() => driveAudioEngine.getPlaylist());
+  const activeTrackRef = useRef<HTMLDivElement | null>(null);
 
-  // Check auth state on mount
+  // Auto-scroll the active track inside the scrollable playlist window
+  useEffect(() => {
+    if (activeTrackRef.current) {
+      activeTrackRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [currentTrack?.id]);
+
+  // Check auth state on mount & use instant cache without blocking network rescan
   useEffect(() => {
     if (googleDriveService.hasToken()) {
       setIsAuthenticated(true);
-      loadMusicFolder();
+      const cached = driveCacheService.getCachedLibrarySync();
+      if (cached && Array.isArray(cached.allRecursiveFiles) && cached.allRecursiveFiles.length > 0) {
+        // Instant restore from cache - 0 wait time!
+        const playlistToSet = cached.files.length > 0 ? cached.files : cached.allRecursiveFiles;
+        driveAudioEngine.setPlaylist(playlistToSet);
+        setFiles(cached.files);
+        setSubfolders(cached.subfolders);
+        setAllRecursiveFiles(cached.allRecursiveFiles);
+        setTotalRecursiveFiles(cached.totalRecursiveFiles);
+        setFolderStack(cached.folderStack);
+        setCurrentFolderId(cached.folderId);
+        setFolderStatus(cached.folderStatus);
+        setLoadProgress(100);
+      } else {
+        // Only load over network on first-time setup or if cache is empty
+        loadMusicFolder();
+      }
     }
   }, []);
 
@@ -67,11 +104,13 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       setDuration(dur);
     });
     const unsubTrack = driveAudioEngine.onTrackChange(track => setCurrentTrack(track));
+    const unsubPlaylist = driveAudioEngine.onPlaylistChange(list => setActivePlaylist(list));
 
     return () => {
       unsubStatus();
       unsubTime();
       unsubTrack();
+      unsubPlaylist();
     };
   }, []);
 
@@ -87,18 +126,20 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   };
 
   const handlePlayCurrentFolderSequential = async () => {
-    if (files.length === 0) return;
+    const listToPlay = files.length > 0 ? files : allRecursiveFiles;
+    if (listToPlay.length === 0) return;
     onActivateDriveSource();
     const token = googleDriveService.getToken();
     if (!token) return;
-    driveAudioEngine.setPlaylist(files, 0);
-    await driveAudioEngine.playTrack(files[0], token);
-    setFolderStatus(`Reproduciendo carpeta actual en orden (${files.length} pistas)`);
+    driveAudioEngine.setPlaylist(listToPlay, 0);
+    await driveAudioEngine.playTrack(listToPlay[0], token);
+    setFolderStatus(`Reproduciendo en orden (${listToPlay.length} pistas)`);
   };
 
   const handlePlayCurrentFolderShuffle = async () => {
-    if (files.length === 0) return;
-    const listToPlay = [...files];
+    const sourceList = files.length > 0 ? files : allRecursiveFiles;
+    if (sourceList.length === 0) return;
+    const listToPlay = [...sourceList];
     for (let i = listToPlay.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [listToPlay[i], listToPlay[j]] = [listToPlay[j], listToPlay[i]];
@@ -108,7 +149,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     if (!token) return;
     driveAudioEngine.setPlaylist(listToPlay, 0);
     await driveAudioEngine.playTrack(listToPlay[0], token);
-    setFolderStatus(`Reproduciendo carpeta actual en aleatorio (${listToPlay.length} pistas)`);
+    setFolderStatus(`Reproduciendo en aleatorio (${listToPlay.length} pistas)`);
   };
 
   const handlePlayShuffle = async () => {
@@ -126,11 +167,29 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     setFolderStatus(`Reproduciendo en aleatorio (${listToPlay.length} pistas)`);
   };
 
-  const loadMusicFolder = async (targetFolderId?: string) => {
+  const loadMusicFolder = async (targetFolderId?: string, forceRefresh = false) => {
+    // 1. If not a forced refresh, check cache first to avoid waiting
+    if (!forceRefresh) {
+      const cached = await driveCacheService.getCachedLibrary();
+      if (cached && Array.isArray(cached.allRecursiveFiles) && cached.allRecursiveFiles.length > 0) {
+        setCurrentFolderId(cached.folderId);
+        setFiles(cached.files);
+        setSubfolders(cached.subfolders);
+        setAllRecursiveFiles(cached.allRecursiveFiles);
+        setTotalRecursiveFiles(cached.totalRecursiveFiles);
+        setFolderStack(cached.folderStack);
+        setFolderStatus(cached.folderStatus);
+        setLoadProgress(100);
+        driveAudioEngine.setPlaylist(cached.files.length > 0 ? cached.files : cached.allRecursiveFiles);
+        setIsLoading(false);
+        return;
+      }
+    }
+
     setIsLoading(true);
     setLoadProgress(15);
     setErrorMessage(null);
-    setFolderStatus('Buscando carpeta /mimusica...');
+    setFolderStatus('Buscando carpeta /mimusica en Google Drive...');
 
     try {
       const token = googleDriveService.getToken();
@@ -163,7 +222,8 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       ]);
 
       setLoadProgress(85);
-      setFolderStack([{ id: contents.folderId, name: contents.folderName }]);
+      const initialStack = [{ id: contents.folderId, name: contents.folderName }];
+      setFolderStack(initialStack);
 
       // Check cached status for each file
       const cachedIds = await driveCacheService.getCachedFileIds();
@@ -181,9 +241,22 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       setSubfolders(contents.subfolders);
       setAllRecursiveFiles(enrichedAll);
       setTotalRecursiveFiles(enrichedAll.length);
-      driveAudioEngine.setPlaylist(enrichedFiles);
+      driveAudioEngine.setPlaylist(enrichedFiles.length > 0 ? enrichedFiles : enrichedAll);
       setLoadProgress(100);
-      setFolderStatus(`${contents.subfolders.length} carpetas, ${enrichedAll.length} canciones en total en /mimusica`);
+      const finalStatus = `${contents.subfolders.length} carpetas, ${enrichedAll.length} canciones en total en /mimusica`;
+      setFolderStatus(finalStatus);
+
+      // Save library to cache so future visits are 100% instant
+      await driveCacheService.saveCachedLibrary({
+        folderId,
+        folderName: contents.folderName,
+        files: enrichedFiles,
+        subfolders: contents.subfolders,
+        allRecursiveFiles: enrichedAll,
+        folderStack: initialStack,
+        totalRecursiveFiles: enrichedAll.length,
+        folderStatus: finalStatus,
+      });
     } catch (err: any) {
       console.error('Error loading music folder:', err);
       setErrorMessage(err.message || 'Error al conectar con la API de Google Drive');
@@ -222,6 +295,21 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     if (!target) return;
     const token = googleDriveService.getToken();
     if (!token) return;
+
+    // Fast path: if navigating back to root folder (index 0) and we have cache
+    if (index === 0) {
+      const cached = driveCacheService.getCachedLibrarySync();
+      if (cached && cached.folderId === target.id) {
+        setCurrentFolderId(target.id);
+        setFolderStack([{ id: cached.folderId, name: cached.folderName }]);
+        setFiles(cached.files);
+        setSubfolders(cached.subfolders);
+        driveAudioEngine.setPlaylist(cached.files);
+        setFolderStatus(`${cached.subfolders.length} carpetas, ${cached.allRecursiveFiles.length} canciones en total en /mimusica`);
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       setCurrentFolderId(target.id);
@@ -247,6 +335,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     onActivateDriveSource();
     const token = googleDriveService.getToken();
     if (!token) return;
+    setLoadingSubfolderId(sub.id);
     setIsLoading(true);
     try {
       setFolderStatus(`Cargando carpeta "${sub.name}"...`);
@@ -254,21 +343,36 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       if (subFiles.length === 0) {
         setFolderStatus(`La carpeta "${sub.name}" no contiene archivos de audio.`);
         setIsLoading(false);
+        setLoadingSubfolderId(null);
         return;
       }
       const cachedIds = await driveCacheService.getCachedFileIds();
       const enriched = subFiles.map(f => ({ ...f, isCached: cachedIds.includes(f.id) }));
       driveAudioEngine.setPlaylist(enriched, 0);
+      setPlayingSubfolderId(sub.id);
       await driveAudioEngine.playTrack(enriched[0], token);
       setFolderStatus(`Reproduciendo carpeta "${sub.name}" (${enriched.length} pistas)`);
     } catch (err: any) {
       setErrorMessage(err.message || 'Error al reproducir carpeta');
     } finally {
       setIsLoading(false);
+      setLoadingSubfolderId(null);
     }
   };
 
-  const handleSelectTrack = async (file: DriveAudioFile, index: number) => {
+  const displayFiles = files.length > 0 ? files : (folderStack.length <= 1 ? allRecursiveFiles : []);
+
+  const queueList = useMemo(() => {
+    if (activePlaylist && activePlaylist.length > 0) {
+      return activePlaylist;
+    }
+    if (files.length > 0) {
+      return files;
+    }
+    return allRecursiveFiles;
+  }, [activePlaylist, files, allRecursiveFiles]);
+
+  const handleSelectTrack = async (file: DriveAudioFile, index: number, customList?: DriveAudioFile[]) => {
     onActivateDriveSource();
     const token = googleDriveService.getToken();
     if (!token) {
@@ -276,7 +380,8 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       setIsAuthenticated(false);
       return;
     }
-    driveAudioEngine.setPlaylist(files, index);
+    const currentList = customList || (displayFiles.length > 0 ? displayFiles : (allRecursiveFiles.length > 0 ? allRecursiveFiles : files));
+    driveAudioEngine.setPlaylist(currentList, index);
     await driveAudioEngine.playTrack(file, token);
   };
 
@@ -285,8 +390,8 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       driveAudioEngine.pause();
     } else if (playbackStatus === 'paused') {
       driveAudioEngine.resume();
-    } else if (files.length > 0) {
-      handleSelectTrack(files[0], 0);
+    } else if (displayFiles.length > 0) {
+      handleSelectTrack(displayFiles[0], 0);
     }
   };
 
@@ -341,17 +446,22 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
           ) : (
             <div className="flex items-center gap-2">
               <button
-                onClick={loadMusicFolder}
+                onClick={() => loadMusicFolder(undefined, true)}
                 disabled={isLoading}
                 className="neo-button bg-[#8B5CF6] text-white px-3.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1.5 hover:bg-[#7c3aed] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                title="Volver a escanear Google Drive para sincronizar canciones nuevas"
               >
-                <span className="material-symbols-outlined text-sm">refresh</span>
-                Actualizar
+                <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>sync</span>
+                {isLoading ? 'Escaneando...' : 'Sincronizar'}
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   googleDriveService.clearAccessToken();
+                  await driveCacheService.clearCachedLibrary();
                   setIsAuthenticated(false);
+                  if (onDisconnect) {
+                    onDisconnect();
+                  }
                 }}
                 className="p-1.5 bg-[#262626] border-2 border-black hover:bg-[#333] text-[#bbb] hover:text-white cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                 title="Desconectar o cambiar cuenta"
@@ -371,7 +481,11 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               {isLoading ? 'sync' : 'folder_open'}
             </span>
             <span className="font-mono-tech text-xs text-white font-bold uppercase tracking-wider">
-              {isLoading ? 'Leyendo archivos y carpetas dentro de /mimusica...' : 'Lectura de /mimusica completada'}
+              {isLoading
+                ? 'Leyendo archivos y carpetas dentro de /mimusica...'
+                : totalRecursiveFiles > 0
+                ? 'Colección /mimusica lista (Caché instantánea)'
+                : 'Lectura de /mimusica completada'}
             </span>
           </div>
           <span className="font-mono-tech text-xs text-[#4edea3] font-bold">
@@ -402,28 +516,129 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
 
       {/* Not authenticated state */}
       {!isAuthenticated && (
-        <div className="bg-[#1A1A1A] border-3 border-black neo-shadow p-6 sm:p-8 text-center flex flex-col items-center justify-center gap-5">
+        <div className="bg-[#1A1A1A] border-3 border-black neo-shadow p-6 sm:p-8 text-center flex flex-col items-center justify-center gap-6">
           <div className="w-16 h-16 bg-[#201f1f] border-3 border-black flex items-center justify-center text-[#4edea3]">
             <span className="material-symbols-outlined text-4xl">cloud_sync</span>
           </div>
           <div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-tight">Sincroniza tu música de Google Drive</h2>
-            <p className="font-mono-tech text-xs sm:text-sm text-[#bbcabf] max-w-lg mt-2 mx-auto leading-relaxed">
-              Reproduce tus archivos MP3, listas y álbumes de Google Drive con reproducción en segundo plano y ecualizador integrado. Diseñado especialmente para el navegador del <strong className="text-white">Tesla Model 3 Highland</strong>.
+            <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">Sincroniza tu música de Google Drive</h2>
+            <p className="font-mono-tech text-xs sm:text-sm text-[#bbcabf] max-w-xl mt-2 mx-auto leading-relaxed">
+              Reproduce tus archivos MP3, listas y álbumes de Google Drive con reproducción en segundo plano y ecualizador integrado. Diseñado especialmente para la pantalla y el navegador de tu <strong className="text-white">coche</strong>.
             </p>
           </div>
 
-          {/* Information Card */}
-          <div className="bg-[#141414] border-2 border-black p-4 max-w-md w-full text-left font-mono-tech text-xs text-[#bbcabf] flex items-start gap-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-            <span className="material-symbols-outlined text-[#4edea3] text-xl shrink-0 mt-0.5">info</span>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-white font-bold uppercase text-xs">Acceso centralizado en la cabecera</span>
-              <p className="text-[11px] text-[#bbcabf] leading-relaxed">
-                Utiliza el botón de acceso de Google o <strong className="text-[#4edea3]">Vincular Tesla (QR)</strong> situado en la barra superior para iniciar sesión y sincronizar tu colección.
+          {/* Access / Action Card */}
+          <div className="bg-[#141414] border-2 border-black p-4 max-w-2xl w-full text-left font-mono-tech text-xs text-[#bbcabf] flex flex-col sm:flex-row items-start gap-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+            <span className="material-symbols-outlined text-[#4edea3] text-2xl shrink-0 mt-0.5">info</span>
+            <div className="flex-1 flex flex-col gap-2">
+              <span className="text-white font-bold uppercase text-xs tracking-wide">Acceso centralizado en la cabecera</span>
+              <p className="text-[12px] text-[#bbcabf] leading-relaxed">
+                Utiliza el botón de acceso de Google o <strong className="text-[#4edea3]">Vincular Coche (QR)</strong> situado en la barra superior para iniciar sesión y sincronizar tu colección.
               </p>
-              <p className="text-[10px] text-[#86948a] leading-relaxed border-t border-[#262626] pt-1.5">
-                💡 En el navegador de Tesla, el emparejamiento por código QR desde el móvil evita bloqueos de pestañas emergentes.
+              {triggerCarPairing && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={triggerCarPairing}
+                    className="neo-button bg-[#4edea3] text-black px-3 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1.5 hover:bg-[#3bc791] cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
+                    Abrir Vincular Coche (QR)
+                  </button>
+                </div>
+              )}
+              <p className="text-[11px] text-[#86948a] leading-relaxed border-t border-[#262626] pt-1.5">
+                💡 En el navegador del coche, el emparejamiento por código QR desde el móvil evita bloqueos de pestañas emergentes y autoriza en 1 segundo.
               </p>
+            </div>
+          </div>
+
+          {/* Comprehensive Guide: Where to put music and how folder playlists work */}
+          <div className="bg-[#121212] border-3 border-black p-5 sm:p-6 max-w-2xl w-full text-left flex flex-col gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div className="flex items-center gap-2 border-b-2 border-black pb-2.5">
+              <span className="material-symbols-outlined text-[#4edea3] text-xl">folder_special</span>
+              <h3 className="text-white font-black text-sm uppercase tracking-wide">
+                ¿Dónde colocar tu música en Google Drive y cómo organizar tus listas?
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Step 1: Main folder location */}
+              <div className="bg-[#1c1c1c] border-2 border-black p-3.5 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-[#4edea3] font-bold text-xs uppercase font-mono-tech">
+                  <span className="w-5 h-5 bg-[#4edea3] text-black font-black flex items-center justify-center text-[11px] shrink-0">1</span>
+                  <span>Carpeta Principal en Google Drive</span>
+                </div>
+                <p className="text-[11px] text-[#ccc] font-mono-tech leading-relaxed">
+                  Crea una carpeta llamada <strong className="text-white bg-black px-1.5 py-0.5 border border-[#444]">mimusica</strong> (o también <code className="text-[#4edea3]">Música</code> / <code className="text-[#4edea3]">Music</code>) directamente en la raíz de tu Drive (<strong className="text-white">Mi unidad</strong>).
+                </p>
+                <p className="text-[10px] text-[#86948a] font-mono-tech mt-1">
+                  ✓ El reproductor la detectará de forma automática e inmediata al conectar tu cuenta.
+                </p>
+              </div>
+
+              {/* Step 2: Subfolders as playlists */}
+              <div className="bg-[#1c1c1c] border-2 border-black p-3.5 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-[#06B6D4] font-bold text-xs uppercase font-mono-tech">
+                  <span className="w-5 h-5 bg-[#06B6D4] text-black font-black flex items-center justify-center text-[11px] shrink-0">2</span>
+                  <span>Carpetas = Listas de Reproducción</span>
+                </div>
+                <p className="text-[11px] text-[#ccc] font-mono-tech leading-relaxed">
+                  Cada subcarpeta que crees dentro de <strong className="text-white">mimusica</strong> se convierte automáticamente en una <strong className="text-[#06B6D4]">Lista de Reproducción o Álbum</strong> independiente.
+                </p>
+                <p className="text-[10px] text-[#86948a] font-mono-tech mt-1">
+                  ✓ Puedes navegar entre listas o reproducir cualquier carpeta completa con un toque.
+                </p>
+              </div>
+            </div>
+
+            {/* Folder structure diagram */}
+            <div className="bg-black border-2 border-black p-3.5 font-mono-tech text-[11px] text-[#bbcabf] overflow-x-auto">
+              <div className="text-[10px] text-[#4edea3] font-bold uppercase mb-1.5 tracking-wider flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">account_tree</span>
+                Ejemplo de estructura recomendada en Google Drive:
+              </div>
+              <pre className="text-[11px] leading-relaxed font-mono whitespace-pre text-[#e5e5e5]">
+{`📁 Mi unidad (Google Drive)
+  └── 📁 mimusica                   ← Carpeta principal autodetectada
+        ├── 📁 Rock Clásico         ← Lista de reproducción 1
+        │     ├── Thunderstruck.mp3
+        │     └── Back_In_Black.mp3
+        ├── 📁 Música de Viaje      ← Lista de reproducción 2
+        │     ├── Road_Trip.mp3
+        │     └── Highway_Star.m4a
+        ├── 📁 Pop & Chill          ← Lista de reproducción 3
+        │     ├── track01.mp3
+        │     └── track02.flac
+        └── Cancion_Suelta.mp3      ← Disponible en la lista general`}
+              </pre>
+            </div>
+
+            {/* Formats and playback features */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-[#262626]">
+              <div className="flex flex-col gap-1 font-mono-tech text-[11px]">
+                <span className="text-white font-bold uppercase flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm text-[#4edea3]">audio_file</span>
+                  Formatos Compatibles
+                </span>
+                <div className="flex flex-wrap gap-1 mt-0.5">
+                  {['MP3', 'M4A', 'FLAC', 'AAC', 'WAV', 'OGG'].map(fmt => (
+                    <span key={fmt} className="bg-[#201f1f] text-[#4edea3] text-[10px] font-bold px-1.5 py-0.5 border border-black">
+                      {fmt}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1 font-mono-tech text-[11px]">
+                <span className="text-white font-bold uppercase flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm text-[#06B6D4]">offline_bolt</span>
+                  Ventajas para Conducción
+                </span>
+                <p className="text-[10px] text-[#aaa] leading-relaxed">
+                  Reproducción continua en segundo plano, controles de volante integrados y <strong className="text-white">caché local inteligente</strong> para que el audio no se corte en túneles o zonas sin cobertura móvil.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -437,7 +652,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b-2 border-black pb-3 gap-3">
               <h3 className="font-black text-lg text-white uppercase tracking-tight flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#4edea3]">queue_music</span>
-                Pistas en /mimusica ({totalRecursiveFiles} canciones)
+                {folderStack.length > 1 ? folderStack[folderStack.length - 1].name : 'Colección /mimusica'} ({totalRecursiveFiles > 0 ? totalRecursiveFiles : files.length} canciones)
               </h3>
               <div className="flex items-center gap-2 flex-wrap">
                 <button
@@ -531,43 +746,110 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
             {/* Subfolders Grid */}
             {subfolders.length > 0 && (
               <div className="flex flex-col gap-2">
-                <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider">Subcarpetas / Playlists</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5">
-                  {subfolders.map(sub => (
-                    <div
-                      key={sub.id}
-                      onClick={() => navigateToSubfolder(sub)}
-                      className="bg-[#201f1f] border-2 border-black p-3 neo-shadow flex items-center justify-between gap-2 hover:bg-[#282727] cursor-pointer transition-all group"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <span className="material-symbols-outlined text-[#8B5CF6] text-xl shrink-0 group-hover:scale-110 transition-transform">folder</span>
-                        <span className="font-bold text-xs text-white truncate uppercase">{sub.name}</span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePlaySubfolder(sub);
-                        }}
-                        title="Reproducir esta carpeta"
-                        className="neo-button bg-[#4edea3] text-black px-2.5 py-1.5 font-mono-tech text-[10px] font-bold uppercase flex items-center gap-1 shrink-0 hover:bg-[#3bc791]"
+                <div className="flex items-center justify-between">
+                  <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider">
+                    Subcarpetas / Playlists ({subfolders.length})
+                  </h4>
+                  <span className="text-[10px] font-mono-tech text-[#bbcabf]">
+                    Pulsa tarjeta para abrir • Botón ▶ para reproducir
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-2.5 sm:gap-3">
+                  {subfolders.map(sub => {
+                    const isSubPlaying =
+                      (playingSubfolderId === sub.id || currentTrack?.album === sub.name) &&
+                      playbackStatus === 'playing';
+                    const isSubPaused =
+                      (playingSubfolderId === sub.id || currentTrack?.album === sub.name) &&
+                      playbackStatus === 'paused';
+                    const isSubLoading = loadingSubfolderId === sub.id;
+
+                    return (
+                      <div
+                        key={sub.id}
+                        onClick={() => navigateToSubfolder(sub)}
+                        title={`Abrir carpeta: ${sub.name}`}
+                        className={`border-2 border-black p-2.5 sm:p-3 transition-all cursor-pointer group flex items-center justify-between gap-3 ${
+                          isSubPlaying
+                            ? 'bg-[#201f1f] shadow-[3px_3px_0px_0px_rgba(78,222,163,0.8)] border-[#4edea3]'
+                            : 'bg-[#1e1e1e] hover:bg-[#252525] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]'
+                        }`}
                       >
-                        <span className="material-symbols-outlined text-xs font-black">play_arrow</span>
-                        Reproducir
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-black/40 border border-black flex items-center justify-center shrink-0">
+                            <span className="material-symbols-outlined text-[#8B5CF6] text-xl group-hover:scale-110 transition-transform">
+                              folder
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span
+                              className="font-bold text-xs sm:text-sm text-white uppercase group-hover:text-[#4edea3] break-words line-clamp-2 leading-snug"
+                              title={sub.name}
+                            >
+                              {sub.name}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Play Button - Exactly styled like the RADIO play button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isSubPlaying) {
+                              driveAudioEngine.pause();
+                            } else if (isSubPaused) {
+                              driveAudioEngine.resume();
+                            } else {
+                              handlePlaySubfolder(sub);
+                            }
+                          }}
+                          title={
+                            isSubPlaying
+                              ? `Pausar ${sub.name}`
+                              : isSubPaused
+                              ? `Reanudar ${sub.name}`
+                              : `Reproducir carpeta ${sub.name}`
+                          }
+                          aria-label={`Reproducir carpeta ${sub.name}`}
+                          className={`w-11 h-7 sm:w-12 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
+                            isSubPlaying
+                              ? 'bg-[#181818] text-[#4edea3] shadow-[0_3px_0_0_#000000] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_#000000] active:translate-y-[3px] active:shadow-none'
+                              : isSubLoading
+                              ? 'bg-[#F59E0B] text-black shadow-[0_3px_0_0_#b45309] hover:-translate-y-[1px] active:translate-y-[3px]'
+                              : 'bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] shadow-[0_3px_0_0_#000000] hover:from-[#6df5c1] hover:to-[#43d499] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_#000000] active:translate-y-[3px] active:shadow-none'
+                          }`}
+                        >
+                          {isSubLoading ? (
+                            <span className="material-symbols-outlined text-sm font-bold animate-spin">
+                              progress_activity
+                            </span>
+                          ) : isSubPlaying ? (
+                            <span className="material-symbols-outlined text-base font-black">
+                              pause
+                            </span>
+                          ) : (
+                            <span className="material-symbols-outlined text-base font-black">
+                              play_arrow
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* Song list */}
-            <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
-              {files.length === 0 ? (
-                <div className="py-12 text-center font-mono-tech text-sm text-[#bbcabf]">
-                  {isLoading ? 'Cargando canciones...' : 'No se encontraron archivos de audio MP3 en la carpeta /mimusica.'}
-                </div>
-              ) : (
-                files.map((file, idx) => {
+            {displayFiles.length > 0 ? (
+              <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider mt-2">
+                  {folderStack.length > 1
+                    ? `Canciones en esta carpeta (${displayFiles.length})`
+                    : `Todas las canciones (${displayFiles.length})`}
+                </h4>
+                {displayFiles.map((file, idx) => {
                   const isCurrent = currentTrack?.id === file.id;
                   return (
                     <div
@@ -590,7 +872,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                         <div className="truncate">
                           <div className="font-bold text-sm truncate">{file.name}</div>
                           <div className={`font-mono-tech text-[10px] truncate ${isCurrent ? 'text-black/80' : 'text-[#bbcabf]'}`}>
-                            {file.artist} • {file.size ? `${Math.round(file.size / 1024 / 1024 * 10) / 10} MB` : 'Cloud Stream'}
+                            {file.artist} • {file.album || 'Drive'} • {file.size ? `${Math.round(file.size / 1024 / 1024 * 10) / 10} MB` : 'Cloud Stream'}
                           </div>
                         </div>
                       </div>
@@ -607,38 +889,77 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                             DRIVE
                           </span>
                         )}
-                        <span className="material-symbols-outlined text-xl">play_arrow</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isCurrent && playbackStatus === 'playing') {
+                              driveAudioEngine.pause();
+                            } else if (isCurrent && playbackStatus === 'paused') {
+                              driveAudioEngine.resume();
+                            } else {
+                              handleSelectTrack(file, idx);
+                            }
+                          }}
+                          title={isCurrent && playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
+                          aria-label={isCurrent && playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
+                          className={`w-11 h-7 sm:w-12 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
+                            isCurrent && playbackStatus === 'playing'
+                              ? 'bg-[#181818] text-[#4edea3] shadow-[0_3px_0_0_#000000] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_#000000] active:translate-y-[3px] active:shadow-none'
+                              : isCurrent && playbackStatus === 'loading'
+                              ? 'bg-[#F59E0B] text-black shadow-[0_3px_0_0_#b45309]'
+                              : 'bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] shadow-[0_3px_0_0_#000000] hover:from-[#6df5c1] hover:to-[#43d499] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_#000000] active:translate-y-[3px] active:shadow-none'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-base font-black">
+                            {isCurrent && playbackStatus === 'playing' ? 'pause' : 'play_arrow'}
+                          </span>
+                        </button>
                       </div>
                     </div>
                   );
-                })
-              )}
-            </div>
+                })}
+              </div>
+            ) : isLoading ? (
+              <div className="py-8 text-center font-mono-tech text-sm text-[#bbcabf]">
+                Cargando canciones...
+              </div>
+            ) : subfolders.length === 0 ? (
+              <div className="py-12 text-center font-mono-tech text-sm text-[#bbcabf]">
+                {folderStack.length > 1
+                  ? 'Esta carpeta no contiene archivos de audio MP3.'
+                  : 'No se encontraron archivos de audio MP3 en la carpeta /mimusica.'}
+              </div>
+            ) : (
+              <div className="py-6 text-center font-mono-tech text-xs text-[#bbcabf] bg-[#201f1f] border-2 border-black p-3">
+                Selecciona una de las {subfolders.length} subcarpetas de arriba para ver sus canciones.
+              </div>
+            )}
           </div>
 
           {/* Right: Active Player Card (1 col) */}
-          <div className="bg-[#1A1A1A] border-3 border-black neo-shadow p-5 flex flex-col justify-between gap-6">
-            <div className="flex flex-col gap-4">
-              <div className="border-b-2 border-black pb-3 flex items-center justify-between">
+          <div className="bg-[#1A1A1A] border-3 border-black neo-shadow p-4 sm:p-5 flex flex-col justify-between gap-3 min-h-[580px] h-full">
+            <div className="flex flex-col gap-3 shrink-0">
+              <div className="border-b-2 border-black pb-2 flex items-center justify-between">
                 <span className="font-mono-tech text-xs font-bold text-[#bbcabf] uppercase">Reproductor Activo</span>
                 <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] animate-pulse"></span>
               </div>
 
               {/* Cover Art Box */}
-              <div className="w-full aspect-square bg-[#201f1f] border-3 border-black neo-shadow flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+              <div className="w-full h-32 sm:h-36 bg-[#201f1f] border-3 border-black neo-shadow flex flex-col items-center justify-center p-3 text-center relative overflow-hidden shrink-0">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#8B5CF6]/20 to-transparent"></div>
-                <span className="material-symbols-outlined text-7xl text-[#4edea3] mb-3 relative z-10">album</span>
-                <div className="font-black text-lg text-white uppercase tracking-tight relative z-10 truncate max-w-full">
+                <span className="material-symbols-outlined text-4xl sm:text-5xl text-[#4edea3] mb-1 relative z-10">album</span>
+                <div className="font-black text-sm sm:text-base text-white uppercase tracking-tight relative z-10 truncate max-w-full">
                   {currentTrack ? currentTrack.name : 'Ninguna pista seleccionada'}
                 </div>
-                <div className="font-mono-tech text-xs text-[#bbcabf] relative z-10 mt-1 truncate max-w-full">
-                  {currentTrack ? currentTrack.artist : 'Selecciona una canción de la lista'}
+                <div className="font-mono-tech text-[11px] text-[#bbcabf] relative z-10 truncate max-w-full">
+                  {currentTrack ? `${currentTrack.artist || 'Google Drive'} • ${currentTrack.album || 'Drive'}` : 'Selecciona una canción o carpeta'}
                 </div>
               </div>
 
               {/* Seek Bar */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between font-mono-tech text-[11px] text-[#bbcabf]">
+              <div className="flex flex-col gap-1 shrink-0">
+                <div className="flex justify-between font-mono-tech text-[10px] text-[#bbcabf]">
                   <span>{formatTime(currentTime)}</span>
                   <span>{formatTime(duration)}</span>
                 </div>
@@ -653,8 +974,96 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               </div>
             </div>
 
+            {/* Scrollable Playlist Window inside the player card */}
+            <div className="flex-1 min-h-[190px] max-h-[380px] bg-[#141414] border-2 border-black neo-shadow flex flex-col overflow-hidden my-1">
+              <div className="bg-[#1f1f1f] border-b-2 border-black px-3 py-1.5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="material-symbols-outlined text-[#4edea3] text-sm">queue_music</span>
+                  <span className="font-mono-tech text-xs font-bold text-white uppercase tracking-wider truncate">
+                    Lista de Reproducción
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {queueList.filter(t => t.isCached).length > 0 && (
+                    <span
+                      className="font-mono-tech text-[9px] text-[#10B981] font-bold bg-black px-1.5 py-0.5 border border-[#10B981]/40 flex items-center gap-1 shrink-0"
+                      title="Canciones precargadas en el búfer del coche para evitar cortes sin cobertura"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></span>
+                      Búfer Coche: {queueList.filter(t => t.isCached).length}
+                    </span>
+                  )}
+                  <span className="font-mono-tech text-[10px] text-[#4edea3] font-bold bg-black px-1.5 py-0.5 border border-black shrink-0">
+                    {queueList.length} pistas
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 select-none">
+                {queueList.length > 0 ? (
+                  queueList.map((track, idx) => {
+                    const isCurrent = currentTrack?.id === track.id;
+                    return (
+                      <div
+                        key={`${track.id}-${idx}`}
+                        ref={isCurrent ? activeTrackRef : null}
+                        onClick={() => handleSelectTrack(track, idx, queueList)}
+                        className={`px-2.5 py-2 border border-black flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                          isCurrent
+                            ? 'bg-[#4edea3] text-black font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                            : 'bg-[#1c1c1c] text-white hover:bg-[#282828]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div
+                            className={`w-6 h-6 border border-black flex items-center justify-center font-mono-tech text-[10px] shrink-0 ${
+                              isCurrent ? 'bg-black text-[#4edea3]' : 'bg-[#121212] text-[#bbcabf]'
+                            }`}
+                          >
+                            {isCurrent && playbackStatus === 'playing' ? (
+                              <span className="material-symbols-outlined text-xs animate-pulse">volume_up</span>
+                            ) : (
+                              idx + 1
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold truncate leading-tight">{track.name}</div>
+                            <div
+                              className={`font-mono-tech text-[9px] truncate ${
+                                isCurrent ? 'text-black/80' : 'text-[#8e9f93]'
+                              }`}
+                            >
+                              {track.artist || 'Google Drive'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {track.isCached && (
+                            <span
+                              className="bg-[#10B981] text-black text-[8px] font-mono-tech font-bold px-1 py-0.5 border border-black"
+                              title="En caché local"
+                            >
+                              OFF
+                            </span>
+                          )}
+                          <span className={`material-symbols-outlined text-base ${isCurrent ? 'text-black' : 'text-[#4edea3]'}`}>
+                            {isCurrent && playbackStatus === 'playing' ? 'pause' : 'play_arrow'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-8 text-center font-mono-tech text-xs text-[#bbcabf]">
+                    No hay canciones en la lista
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Playback Controls */}
-            <div className="flex items-center justify-center gap-4 pt-2">
+            <div className="flex items-center justify-center gap-4 pt-1 shrink-0">
               <button
                 onClick={() => driveAudioEngine.playPrev()}
                 className="neo-button w-12 h-12 bg-[#201f1f] text-white flex items-center justify-center hover:bg-[#353534]"
