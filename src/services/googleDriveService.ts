@@ -355,67 +355,102 @@ export class GoogleDriveService {
    */
   public async listAudioFilesInFolder(token: string, folderId: string): Promise<DriveAudioFile[]> {
     const allFiles: DriveAudioFile[] = [];
+    const seenFileIds = new Set<string>();
+    const visitedFolderIds = new Set<string>();
 
     const traverseFolder = async (currentId: string, currentAlbumName: string) => {
-      const audioQuery = encodeURIComponent(`'${currentId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`);
-      const fields = encodeURIComponent('nextPageToken, files(id, name, mimeType, size, modifiedTime, thumbnailLink)');
-      const audioUrl = `https://www.googleapis.com/drive/v3/files?q=${audioQuery}&fields=${fields}&pageSize=100`;
+      if (visitedFolderIds.has(currentId)) return;
+      visitedFolderIds.add(currentId);
 
-      const audioRes = await this.fetchWithBackoff(audioUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const AUDIO_EXT_REGEX = /\.(mp3|m4a|wav|flac|aac|ogg|wma|opus|webm)$/i;
+      let audioPageToken: string | undefined = undefined;
 
-      if (audioRes.ok) {
-        const audioData = await audioRes.json();
-        const files = audioData.files || [];
-        const AUDIO_EXT_REGEX = /\.(mp3|m4a|wav|flac|aac|ogg|wma|opus|webm)$/i;
-        for (const file of files) {
-          const isAudio = (file.mimeType && file.mimeType.startsWith('audio/')) || AUDIO_EXT_REGEX.test(file.name || '');
-          if (!isAudio) continue;
-
-          let name = file.name || 'Pista sin título';
-          name = name.replace(/\.[^/.]+$/, ''); // remove extension
-          let artist = 'Google Drive Cloud';
-          let album = currentAlbumName;
-
-          if (name.includes(' - ')) {
-            const parts = name.split(' - ');
-            artist = parts[0].trim();
-            name = parts.slice(1).join(' - ').trim();
-          }
-
-          const detectedMime = (file.mimeType && file.mimeType.startsWith('audio/'))
-            ? file.mimeType
-            : this.inferMimeTypeFromName(file.name || '');
-
-          allFiles.push({
-            id: file.id,
-            name,
-            size: file.size ? Number(file.size) : undefined,
-            modifiedTime: file.modifiedTime,
-            thumbnailLink: file.thumbnailLink,
-            artist,
-            album,
-            mimeType: detectedMime,
-            isCached: false,
-          });
+      do {
+        const audioQuery = encodeURIComponent(`'${currentId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`);
+        const fields = encodeURIComponent('nextPageToken, files(id, name, mimeType, size, modifiedTime, thumbnailLink)');
+        let audioUrl = `https://www.googleapis.com/drive/v3/files?q=${audioQuery}&fields=${fields}&pageSize=100`;
+        if (audioPageToken) {
+          audioUrl += `&pageToken=${encodeURIComponent(audioPageToken)}`;
         }
-      }
+
+        const audioRes = await this.fetchWithBackoff(audioUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (audioRes.ok) {
+          const audioData = await audioRes.json();
+          const files = audioData.files || [];
+          for (const file of files) {
+            if (seenFileIds.has(file.id)) continue;
+            const isAudio = (file.mimeType && file.mimeType.startsWith('audio/')) || AUDIO_EXT_REGEX.test(file.name || '');
+            if (!isAudio) continue;
+
+            seenFileIds.add(file.id);
+
+            let name = file.name || 'Pista sin título';
+            name = name.replace(/\.[^/.]+$/, ''); // remove extension
+            let artist = 'Google Drive Cloud';
+            let album = currentAlbumName;
+
+            if (name.includes(' - ')) {
+              const parts = name.split(' - ');
+              artist = parts[0].trim();
+              name = parts.slice(1).join(' - ').trim();
+            }
+
+            const detectedMime = (file.mimeType && file.mimeType.startsWith('audio/'))
+              ? file.mimeType
+              : this.inferMimeTypeFromName(file.name || '');
+
+            allFiles.push({
+              id: file.id,
+              name,
+              size: file.size ? Number(file.size) : undefined,
+              modifiedTime: file.modifiedTime,
+              thumbnailLink: file.thumbnailLink,
+              artist,
+              album,
+              mimeType: detectedMime,
+              isCached: false,
+            });
+          }
+          audioPageToken = audioData.nextPageToken;
+        } else {
+          audioPageToken = undefined;
+        }
+      } while (audioPageToken);
 
       // Fetch subfolders in this folder
-      const subFolderQuery = encodeURIComponent(`'${currentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-      const subFolderUrl = `https://www.googleapis.com/drive/v3/files?q=${subFolderQuery}&fields=files(id,name)&pageSize=50`;
+      let subPageToken: string | undefined = undefined;
+      const subFoldersToTraverse: { id: string; name: string }[] = [];
 
-      const subRes = await this.fetchWithBackoff(subFolderUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (subRes.ok) {
-        const subData = await subRes.json();
-        const subFolders = subData.files || [];
-        for (const sub of subFolders) {
-          await traverseFolder(sub.id, sub.name);
+      do {
+        const subFolderQuery = encodeURIComponent(`'${currentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+        let subFolderUrl = `https://www.googleapis.com/drive/v3/files?q=${subFolderQuery}&fields=nextPageToken,files(id,name)&pageSize=100`;
+        if (subPageToken) {
+          subFolderUrl += `&pageToken=${encodeURIComponent(subPageToken)}`;
         }
+
+        const subRes = await this.fetchWithBackoff(subFolderUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          const subFolders = subData.files || [];
+          for (const sub of subFolders) {
+            if (!visitedFolderIds.has(sub.id)) {
+              subFoldersToTraverse.push({ id: sub.id, name: sub.name });
+            }
+          }
+          subPageToken = subData.nextPageToken;
+        } else {
+          subPageToken = undefined;
+        }
+      } while (subPageToken);
+
+      for (const sub of subFoldersToTraverse) {
+        await traverseFolder(sub.id, sub.name);
       }
     };
 
@@ -451,67 +486,95 @@ export class GoogleDriveService {
       }
     } catch {}
 
-    const audioQuery = encodeURIComponent(`'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`);
-    const fields = encodeURIComponent('nextPageToken, files(id, name, mimeType, size, modifiedTime, thumbnailLink)');
-    const audioUrl = `https://www.googleapis.com/drive/v3/files?q=${audioQuery}&fields=${fields}&pageSize=100`;
-
-    const audioRes = await this.fetchWithBackoff(audioUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
     const files: import('../types/drive').DriveAudioFile[] = [];
-    if (audioRes.ok) {
-      const audioData = await audioRes.json();
-      const rawFiles = audioData.files || [];
-      const AUDIO_EXT_REGEX = /\.(mp3|m4a|wav|flac|aac|ogg|wma|opus|webm)$/i;
-      for (const file of rawFiles) {
-        const isAudio = (file.mimeType && file.mimeType.startsWith('audio/')) || AUDIO_EXT_REGEX.test(file.name || '');
-        if (!isAudio) continue;
+    const seenFileIds = new Set<string>();
+    const AUDIO_EXT_REGEX = /\.(mp3|m4a|wav|flac|aac|ogg|wma|opus|webm)$/i;
 
-        let name = file.name || 'Pista sin título';
-        name = name.replace(/\.[^/.]+$/, '');
-        let artist = 'Google Drive Cloud';
-        let album = folderName;
-
-        if (name.includes(' - ')) {
-          const parts = name.split(' - ');
-          artist = parts[0].trim();
-          name = parts.slice(1).join(' - ').trim();
-        }
-
-        const detectedMime = (file.mimeType && file.mimeType.startsWith('audio/'))
-          ? file.mimeType
-          : this.inferMimeTypeFromName(file.name || '');
-
-        files.push({
-          id: file.id,
-          name,
-          size: file.size ? Number(file.size) : undefined,
-          modifiedTime: file.modifiedTime,
-          thumbnailLink: file.thumbnailLink,
-          artist,
-          album,
-          mimeType: detectedMime,
-          isCached: false,
-        });
+    let audioPageToken: string | undefined = undefined;
+    do {
+      const audioQuery = encodeURIComponent(`'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`);
+      const fields = encodeURIComponent('nextPageToken, files(id, name, mimeType, size, modifiedTime, thumbnailLink)');
+      let audioUrl = `https://www.googleapis.com/drive/v3/files?q=${audioQuery}&fields=${fields}&pageSize=100`;
+      if (audioPageToken) {
+        audioUrl += `&pageToken=${encodeURIComponent(audioPageToken)}`;
       }
-    }
 
-    const subFolderQuery = encodeURIComponent(`'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-    const subFolderUrl = `https://www.googleapis.com/drive/v3/files?q=${subFolderQuery}&fields=files(id,name)&pageSize=50`;
+      const audioRes = await this.fetchWithBackoff(audioUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const subRes = await this.fetchWithBackoff(subFolderUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      if (audioRes.ok) {
+        const audioData = await audioRes.json();
+        const rawFiles = audioData.files || [];
+        for (const file of rawFiles) {
+          if (seenFileIds.has(file.id)) continue;
+          const isAudio = (file.mimeType && file.mimeType.startsWith('audio/')) || AUDIO_EXT_REGEX.test(file.name || '');
+          if (!isAudio) continue;
+
+          seenFileIds.add(file.id);
+
+          let name = file.name || 'Pista sin título';
+          name = name.replace(/\.[^/.]+$/, '');
+          let artist = 'Google Drive Cloud';
+          let album = folderName;
+
+          if (name.includes(' - ')) {
+            const parts = name.split(' - ');
+            artist = parts[0].trim();
+            name = parts.slice(1).join(' - ').trim();
+          }
+
+          const detectedMime = (file.mimeType && file.mimeType.startsWith('audio/'))
+            ? file.mimeType
+            : this.inferMimeTypeFromName(file.name || '');
+
+          files.push({
+            id: file.id,
+            name,
+            size: file.size ? Number(file.size) : undefined,
+            modifiedTime: file.modifiedTime,
+            thumbnailLink: file.thumbnailLink,
+            artist,
+            album,
+            mimeType: detectedMime,
+            isCached: false,
+          });
+        }
+        audioPageToken = audioData.nextPageToken;
+      } else {
+        audioPageToken = undefined;
+      }
+    } while (audioPageToken);
 
     const subfolders: { id: string; name: string }[] = [];
-    if (subRes.ok) {
-      const subData = await subRes.json();
-      const rawSubs = subData.files || [];
-      for (const sub of rawSubs) {
-        subfolders.push({ id: sub.id, name: sub.name });
+    const seenSubfolderIds = new Set<string>();
+
+    let subPageToken: string | undefined = undefined;
+    do {
+      const subFolderQuery = encodeURIComponent(`'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+      let subFolderUrl = `https://www.googleapis.com/drive/v3/files?q=${subFolderQuery}&fields=nextPageToken,files(id,name)&pageSize=100`;
+      if (subPageToken) {
+        subFolderUrl += `&pageToken=${encodeURIComponent(subPageToken)}`;
       }
-    }
+
+      const subRes = await this.fetchWithBackoff(subFolderUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        const rawSubs = subData.files || [];
+        for (const sub of rawSubs) {
+          if (!seenSubfolderIds.has(sub.id)) {
+            seenSubfolderIds.add(sub.id);
+            subfolders.push({ id: sub.id, name: sub.name });
+          }
+        }
+        subPageToken = subData.nextPageToken;
+      } else {
+        subPageToken = undefined;
+      }
+    } while (subPageToken);
 
     return {
       folderId,

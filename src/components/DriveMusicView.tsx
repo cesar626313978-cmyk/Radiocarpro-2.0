@@ -55,17 +55,36 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     }
   });
 
-  const [subfolders, setSubfolders] = useState<{ id: string; name: string }[]>(() => cachedInitial?.subfolders || []);
+  const [subfolders, setSubfolders] = useState<{ id: string; name: string }[]>(() => {
+    if (!cachedInitial?.subfolders) return [];
+    return Array.from(new Map(cachedInitial.subfolders.map(s => [s.id, s])).values());
+  });
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(() => cachedInitial?.folderId || null);
-  const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>(() => cachedInitial?.folderStack || []);
+  const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>(() => {
+    if (!cachedInitial?.folderStack || cachedInitial.folderStack.length === 0) return [];
+    const stack: { id: string; name: string }[] = [];
+    const seen = new Set<string>();
+    for (const item of cachedInitial.folderStack) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        stack.push(item);
+      }
+    }
+    return stack;
+  });
   const [totalRecursiveFiles, setTotalRecursiveFiles] = useState<number>(() => cachedInitial?.totalRecursiveFiles || 0);
-  const [allRecursiveFiles, setAllRecursiveFiles] = useState<DriveAudioFile[]>(() => cachedInitial?.allRecursiveFiles || []);
+  const [allRecursiveFiles, setAllRecursiveFiles] = useState<DriveAudioFile[]>(() => {
+    if (!cachedInitial?.allRecursiveFiles) return [];
+    return Array.from(new Map(cachedInitial.allRecursiveFiles.map(f => [f.id, f])).values());
+  });
   const [loadProgress, setLoadProgress] = useState<number>(() => (cachedInitial ? 100 : 0));
   const [loadingSubfolderId, setLoadingSubfolderId] = useState<string | null>(null);
   const [playingSubfolderId, setPlayingSubfolderId] = useState<string | null>(null);
   const [activePlaylist, setActivePlaylist] = useState<DriveAudioFile[]>(() => driveAudioEngine.getPlaylist());
   const [isConnectingDrive, setIsConnectingDrive] = useState<boolean>(false);
   const [refreshSuccessMessage, setRefreshSuccessMessage] = useState<string | null>(null);
+  const [rootTab, setRootTab] = useState<'folders' | 'all'>('folders');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const activeTrackRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-scroll the active track inside the scrollable playlist window
@@ -96,13 +115,19 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       const cached = driveCacheService.getCachedLibrarySync();
       if (cached && Array.isArray(cached.allRecursiveFiles) && cached.allRecursiveFiles.length > 0) {
         // Instant restore from cache - 0 wait time!
-        const playlistToSet = cached.files.length > 0 ? cached.files : cached.allRecursiveFiles;
+        const uniqueFiles = Array.from(new Map((cached.files || []).map(f => [f.id, f])).values());
+        const uniqueSubs = Array.from(new Map((cached.subfolders || []).map(s => [s.id, s])).values());
+        const uniqueAll = Array.from(new Map((cached.allRecursiveFiles || []).map(f => [f.id, f])).values());
+        const playlistToSet = uniqueFiles.length > 0 ? uniqueFiles : uniqueAll;
         driveAudioEngine.setPlaylist(playlistToSet);
-        setFiles(cached.files);
-        setSubfolders(cached.subfolders);
-        setAllRecursiveFiles(cached.allRecursiveFiles);
-        setTotalRecursiveFiles(cached.totalRecursiveFiles);
-        setFolderStack(cached.folderStack);
+        setFiles(uniqueFiles);
+        setSubfolders(uniqueSubs);
+        setAllRecursiveFiles(uniqueAll);
+        setTotalRecursiveFiles(uniqueAll.length);
+        const initialStack = (cached.folderStack && cached.folderStack.length > 0)
+          ? cached.folderStack
+          : [{ id: cached.folderId, name: cached.folderName }];
+        setFolderStack(initialStack);
         setCurrentFolderId(cached.folderId);
         setFolderStatus(cached.folderStatus);
         setLoadProgress(100);
@@ -254,24 +279,28 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
         isCached: cachedIds.includes(file.id),
       }));
 
-      setFiles(enrichedFiles);
-      setSubfolders(contents.subfolders);
-      setAllRecursiveFiles(enrichedAll);
-      setTotalRecursiveFiles(enrichedAll.length);
-      driveAudioEngine.setPlaylist(enrichedFiles.length > 0 ? enrichedFiles : enrichedAll);
+      const uniqueFiles = Array.from(new Map(enrichedFiles.map(f => [f.id, f])).values());
+      const uniqueAll = Array.from(new Map(enrichedAll.map(f => [f.id, f])).values());
+      const uniqueSubs = Array.from(new Map(contents.subfolders.map(s => [s.id, s])).values());
+
+      setFiles(uniqueFiles);
+      setSubfolders(uniqueSubs);
+      setAllRecursiveFiles(uniqueAll);
+      setTotalRecursiveFiles(uniqueAll.length);
+      driveAudioEngine.setPlaylist(uniqueFiles.length > 0 ? uniqueFiles : uniqueAll);
       setLoadProgress(100);
-      const finalStatus = `${contents.subfolders.length} carpetas, ${enrichedAll.length} canciones en total en /mimusica`;
+      const finalStatus = `${uniqueSubs.length} carpetas, ${uniqueAll.length} canciones en total en /mimusica`;
       setFolderStatus(finalStatus);
 
       // Save library to cache so future visits are 100% instant
       await driveCacheService.saveCachedLibrary({
         folderId,
         folderName: contents.folderName,
-        files: enrichedFiles,
-        subfolders: contents.subfolders,
-        allRecursiveFiles: enrichedAll,
+        files: uniqueFiles,
+        subfolders: uniqueSubs,
+        allRecursiveFiles: uniqueAll,
         folderStack: initialStack,
-        totalRecursiveFiles: enrichedAll.length,
+        totalRecursiveFiles: uniqueAll.length,
         folderStatus: finalStatus,
       });
     } catch (err: any) {
@@ -345,23 +374,68 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     }
   };
 
+  const folderTrackCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const f of allRecursiveFiles) {
+      if (f.album) {
+        const key = f.album.trim().toLowerCase();
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [allRecursiveFiles]);
+
+  const isInsideSubfolder = folderStack.length > 1;
+  const currentFolder = isInsideSubfolder ? folderStack[folderStack.length - 1] : null;
+  const parentFolder = isInsideSubfolder && folderStack.length > 1 ? folderStack[folderStack.length - 2] : null;
+
+  const handleNavigateUp = async () => {
+    if (folderStack.length <= 1) return;
+    await jumpToBreadcrumb(folderStack.length - 2);
+  };
+
   const navigateToSubfolder = async (sub: { id: string; name: string }) => {
+    if (currentFolderId === sub.id) return;
     const token = googleDriveService.getToken();
+
+    // Prevent duplicate entries in folderStack
+    setFolderStack(prev => {
+      const existingIndex = prev.findIndex(item => item.id === sub.id);
+      if (existingIndex !== -1) {
+        return prev.slice(0, existingIndex + 1);
+      }
+      return [...prev, sub];
+    });
+    setCurrentFolderId(sub.id);
+
+    // Instant local tracks match from allRecursiveFiles so folder opens with 0 lag
+    const localMatching = allRecursiveFiles.filter(
+      f => f.album?.trim().toLowerCase() === sub.name.trim().toLowerCase()
+    );
+    if (localMatching.length > 0) {
+      const uniqueLocal = Array.from(new Map(localMatching.map(f => [f.id, f])).values());
+      setFiles(uniqueLocal);
+      setFolderStatus(`Carpeta "${sub.name}" (${uniqueLocal.length} canciones)`);
+    }
+
     if (!token) return;
+
     setIsLoading(true);
     try {
-      setCurrentFolderId(sub.id);
-      setFolderStack(prev => [...prev, sub]);
       const contents = await googleDriveService.getFolderContents(token, sub.id);
       const cachedIds = await driveCacheService.getCachedFileIds();
       const enrichedFiles = contents.files.map(file => ({
         ...file,
         isCached: cachedIds.includes(file.id),
       }));
-      setFiles(enrichedFiles);
-      setSubfolders(contents.subfolders);
-      driveAudioEngine.setPlaylist(enrichedFiles);
-      setFolderStatus(`${contents.subfolders.length} carpetas, ${enrichedFiles.length} canciones`);
+
+      const finalFiles = enrichedFiles.length > 0 ? enrichedFiles : localMatching;
+      const uniqueFiles = Array.from(new Map(finalFiles.map(f => [f.id, f])).values());
+      const uniqueSubs = Array.from(new Map(contents.subfolders.map(s => [s.id, s])).values());
+
+      setFiles(uniqueFiles);
+      setSubfolders(uniqueSubs);
+      setFolderStatus(`${uniqueSubs.length} subcarpetas, ${uniqueFiles.length} canciones en "${sub.name}"`);
     } catch (err: any) {
       setErrorMessage(err.message || 'Error al abrir carpeta');
     } finally {
@@ -370,39 +444,55 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   };
 
   const jumpToBreadcrumb = async (index: number) => {
+    if (index < 0 || index >= folderStack.length) return;
     const target = folderStack[index];
     if (!target) return;
-    const token = googleDriveService.getToken();
-    if (!token) return;
 
-    // Fast path: if navigating back to root folder (index 0) and we have cache
+    // Fast path: navigating back to root folder (index 0)
     if (index === 0) {
       const cached = driveCacheService.getCachedLibrarySync();
-      if (cached && cached.folderId === target.id) {
-        setCurrentFolderId(target.id);
+      if (cached) {
+        setCurrentFolderId(cached.folderId);
         setFolderStack([{ id: cached.folderId, name: cached.folderName }]);
-        setFiles(cached.files);
-        setSubfolders(cached.subfolders);
-        driveAudioEngine.setPlaylist(cached.files);
-        setFolderStatus(`${cached.subfolders.length} carpetas, ${cached.allRecursiveFiles.length} canciones en total en /mimusica`);
+        const uniqueFiles = Array.from(new Map(cached.files.map(f => [f.id, f])).values());
+        const uniqueSubs = Array.from(new Map(cached.subfolders.map(s => [s.id, s])).values());
+        setFiles(uniqueFiles);
+        setSubfolders(uniqueSubs);
+        setFolderStatus(`${uniqueSubs.length} carpetas, ${cached.allRecursiveFiles.length} canciones en total en /mimusica`);
         return;
       }
     }
+
+    const token = googleDriveService.getToken();
+    if (!token) return;
 
     setIsLoading(true);
     try {
       setCurrentFolderId(target.id);
       setFolderStack(prev => prev.slice(0, index + 1));
+
+      const localMatching = allRecursiveFiles.filter(
+        f => f.album?.trim().toLowerCase() === target.name.trim().toLowerCase()
+      );
+      if (localMatching.length > 0) {
+        const uniqueLocal = Array.from(new Map(localMatching.map(f => [f.id, f])).values());
+        setFiles(uniqueLocal);
+      }
+
       const contents = await googleDriveService.getFolderContents(token, target.id);
       const cachedIds = await driveCacheService.getCachedFileIds();
       const enrichedFiles = contents.files.map(file => ({
         ...file,
         isCached: cachedIds.includes(file.id),
       }));
-      setFiles(enrichedFiles);
-      setSubfolders(contents.subfolders);
-      driveAudioEngine.setPlaylist(enrichedFiles);
-      setFolderStatus(`${contents.subfolders.length} carpetas, ${enrichedFiles.length} canciones`);
+
+      const finalFiles = enrichedFiles.length > 0 ? enrichedFiles : localMatching;
+      const uniqueFiles = Array.from(new Map(finalFiles.map(f => [f.id, f])).values());
+      const uniqueSubs = Array.from(new Map(contents.subfolders.map(s => [s.id, s])).values());
+
+      setFiles(uniqueFiles);
+      setSubfolders(uniqueSubs);
+      setFolderStatus(`${uniqueSubs.length} subcarpetas, ${uniqueFiles.length} canciones`);
     } catch (err: any) {
       setErrorMessage(err.message || 'Error al navegar');
     } finally {
@@ -418,7 +508,12 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     setIsLoading(true);
     try {
       setFolderStatus(`Cargando carpeta "${sub.name}"...`);
-      const subFiles = await googleDriveService.listAudioFilesInFolder(token, sub.id);
+      let subFiles = allRecursiveFiles.filter(
+        f => f.album?.trim().toLowerCase() === sub.name.trim().toLowerCase()
+      );
+      if (subFiles.length === 0) {
+        subFiles = await googleDriveService.listAudioFilesInFolder(token, sub.id);
+      }
       if (subFiles.length === 0) {
         setFolderStatus(`La carpeta "${sub.name}" no contiene archivos de audio.`);
         setIsLoading(false);
@@ -426,11 +521,12 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
         return;
       }
       const cachedIds = await driveCacheService.getCachedFileIds();
-      const enriched = subFiles.map(f => ({ ...f, isCached: cachedIds.includes(f.id) }));
-      driveAudioEngine.setPlaylist(enriched, 0);
+      const enriched: DriveAudioFile[] = subFiles.map(f => ({ ...f, isCached: cachedIds.includes(f.id) }));
+      const unique: DriveAudioFile[] = Array.from(new Map<string, DriveAudioFile>(enriched.map(f => [f.id, f])).values());
+      driveAudioEngine.setPlaylist(unique, 0);
       setPlayingSubfolderId(sub.id);
-      await driveAudioEngine.playTrack(enriched[0], token);
-      setFolderStatus(`Reproduciendo carpeta "${sub.name}" (${enriched.length} pistas)`);
+      await driveAudioEngine.playTrack(unique[0], token);
+      setFolderStatus(`Reproduciendo carpeta "${sub.name}" (${unique.length} pistas)`);
     } catch (err: any) {
       setErrorMessage(err.message || 'Error al reproducir carpeta');
     } finally {
@@ -439,7 +535,25 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     }
   };
 
-  const displayFiles = files.length > 0 ? files : (folderStack.length <= 1 ? allRecursiveFiles : []);
+  const filteredAllFiles = useMemo(() => {
+    if (!searchQuery.trim()) return allRecursiveFiles;
+    const q = searchQuery.toLowerCase().trim();
+    return allRecursiveFiles.filter(
+      f => f.name.toLowerCase().includes(q) ||
+           (f.artist && f.artist.toLowerCase().includes(q)) ||
+           (f.album && f.album.toLowerCase().includes(q))
+    );
+  }, [allRecursiveFiles, searchQuery]);
+
+  const displayFiles = useMemo(() => {
+    if (isInsideSubfolder) {
+      return files;
+    }
+    if (rootTab === 'all') {
+      return filteredAllFiles;
+    }
+    return files;
+  }, [isInsideSubfolder, rootTab, files, filteredAllFiles]);
 
   const queueList = useMemo(() => {
     if (activePlaylist && activePlaylist.length > 0) {
@@ -824,79 +938,191 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       {/* Authenticated state */}
       {isAuthenticated && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Playlist view (2 cols) */}
-          <div className="lg:col-span-2 bg-[#1A1A1A] border-3 border-black neo-shadow p-5 flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b-2 border-black pb-3 gap-3">
-              <h3 className="font-black text-lg text-white uppercase tracking-tight flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#4edea3]">queue_music</span>
-                {folderStack.length > 1 ? folderStack[folderStack.length - 1].name : 'Colección /mimusica'} ({totalRecursiveFiles > 0 ? totalRecursiveFiles : files.length} canciones)
-              </h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={handleRefreshFolders}
-                  disabled={isLoading}
-                  title="Actualizar y re-escanear carpetas y archivos de /mimusica"
-                  className="neo-button bg-[#10B981] text-black px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#059669] cursor-pointer disabled:opacity-60"
-                >
-                  <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>sync</span>
-                  <span>{isLoading ? 'Actualizando...' : 'Actualizar Carpetas'}</span>
-                </button>
-                <button
-                  onClick={handlePlayCurrentFolderSequential}
-                  title="Reproducir solo la carpeta actual en orden"
-                  className="neo-button bg-[#4edea3] text-black px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#3bc791] cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">folder_open</span>
-                  Carpeta (Orden)
-                </button>
-                <button
-                  onClick={handlePlayCurrentFolderShuffle}
-                  title="Reproducir solo la carpeta actual en aleatorio (suflé)"
-                  className="neo-button bg-[#06B6D4] text-black px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#0891b2] cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">shuffle</span>
-                  Carpeta (Suflé)
-                </button>
-                <button
-                  onClick={handlePlayAllSequentially}
-                  title="Reproducir todo seguido (todas las subcarpetas)"
-                  className="neo-button bg-[#22c55e] text-black px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#16a34a] cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">playlist_play</span>
-                  Todo (Orden)
-                </button>
-                <button
-                  onClick={handlePlayShuffle}
-                  title="Reproducir todo en aleatorio"
-                  className="neo-button bg-[#8B5CF6] text-white px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#7c3aed] cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">shuffle</span>
-                  Todo (Suflé)
-                </button>
-                <button
-                  onClick={() => setShowEq(!showEq)}
-                  className={`neo-button px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 ${
-                    showEq ? 'bg-[#F59E0B] text-black' : 'bg-[#201f1f] text-[#bbcabf]'
-                  }`}
-                  title="Ecualizador"
-                >
-                  <span className="material-symbols-outlined text-sm">equalizer</span>
-                  EQ
-                </button>
-                <button
-                  onClick={() => setShowDriveGuide(!showDriveGuide)}
-                  className={`neo-button px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 ${
-                    showDriveGuide ? 'bg-[#4edea3] text-black' : 'bg-[#201f1f] text-[#bbcabf]'
-                  }`}
-                  title="Ver cómo organizar carpetas y listas de reproducción en Google Drive"
-                >
-                  <span className="material-symbols-outlined text-sm">folder_special</span>
-                  Guía Drive
-                </button>
-              </div>
-            </div>
+          {/* Left: Library & Explorer (2 cols) */}
+          <div className="lg:col-span-2 bg-[#1A1A1A] border-3 border-black neo-shadow p-4 sm:p-5 flex flex-col gap-4">
+            {/* Top Toolbar / Header Area */}
+            {isInsideSubfolder ? (
+              /* --- INSIDE FOLDER VIEW --- */
+              <div className="flex flex-col gap-3">
+                {/* Back button & Breadcrumbs Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#141414] border-2 border-black p-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                  <button
+                    onClick={handleNavigateUp}
+                    className="neo-button bg-[#4edea3] text-black px-3.5 py-2 font-mono-tech text-xs font-black uppercase flex items-center gap-2 hover:bg-[#38c98e] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 self-start shrink-0"
+                    title={`Volver a ${parentFolder?.name || 'mimusica'}`}
+                  >
+                    <span className="material-symbols-outlined text-base font-black">arrow_back</span>
+                    <span>Volver a {parentFolder?.name || 'mimusica'}</span>
+                  </button>
 
-            {/* Drive Organization Guide Drawer (Visible anytime on request) */}
+                  {/* Interactive Breadcrumb Trail */}
+                  <div className="flex items-center gap-1.5 flex-wrap font-mono-tech text-xs min-w-0">
+                    <span className="material-symbols-outlined text-[#4edea3] text-base shrink-0">folder_open</span>
+                    {folderStack.map((item, idx) => {
+                      const isLast = idx === folderStack.length - 1;
+                      return (
+                        <React.Fragment key={item.id}>
+                          {idx > 0 && <span className="text-[#666]">/</span>}
+                          <button
+                            onClick={() => jumpToBreadcrumb(idx)}
+                            className={`uppercase font-bold transition-colors cursor-pointer truncate max-w-[140px] sm:max-w-[200px] ${
+                              isLast
+                                ? 'text-[#4edea3] font-black underline cursor-default'
+                                : 'text-white hover:text-[#4edea3] hover:underline'
+                            }`}
+                            title={isLast ? 'Carpeta actual' : `Ir a ${item.name}`}
+                          >
+                            {item.name}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Current Folder Info & Action Banner */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#201f1f] border-2 border-black p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 bg-black border-2 border-[#4edea3] flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-[#4edea3] text-2xl">folder</span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-mono-tech text-[10px] text-[#4edea3] font-bold uppercase tracking-wider">
+                        Carpeta actual
+                      </div>
+                      <h3 className="font-black text-lg text-white uppercase tracking-tight truncate">
+                        {currentFolder?.name}
+                      </h3>
+                      <span className="font-mono-tech text-xs text-[#bbcabf]">
+                        {files.length} {files.length === 1 ? 'canción' : 'canciones'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      onClick={handlePlayCurrentFolderSequential}
+                      title="Reproducir esta carpeta en orden"
+                      className="neo-button bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] px-3 py-1.5 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:from-[#6df5c1] hover:to-[#43d499]"
+                    >
+                      <span className="material-symbols-outlined text-base">play_arrow</span>
+                      Reproducir Todo
+                    </button>
+                    <button
+                      onClick={handlePlayCurrentFolderShuffle}
+                      title="Reproducir esta carpeta en modo aleatorio"
+                      className="neo-button bg-[#8B5CF6] text-white px-3 py-1.5 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-[#7c3aed]"
+                    >
+                      <span className="material-symbols-outlined text-base">shuffle</span>
+                      Aleatorio
+                    </button>
+                    <button
+                      onClick={() => setShowEq(!showEq)}
+                      className={`neo-button px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 ${
+                        showEq ? 'bg-[#F59E0B] text-black' : 'bg-[#141414] text-[#bbcabf] border-2 border-black'
+                      }`}
+                      title="Ecualizador"
+                    >
+                      <span className="material-symbols-outlined text-sm">equalizer</span>
+                      EQ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* --- ROOT FOLDER VIEW (/mimusica) --- */
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b-2 border-black pb-3 gap-3">
+                  <div>
+                    <h3 className="font-black text-lg text-white uppercase tracking-tight flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[#4edea3]">folder_special</span>
+                      Colección /mimusica
+                    </h3>
+                    <div className="font-mono-tech text-xs text-[#bbcabf] flex items-center gap-2 mt-0.5">
+                      <span className="text-[#4edea3] font-bold">{subfolders.length} carpetas</span>
+                      <span>•</span>
+                      <span>{totalRecursiveFiles} canciones en total</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={handleRefreshFolders}
+                      disabled={isLoading}
+                      title="Actualizar y re-escanear carpetas y archivos de /mimusica"
+                      className="neo-button bg-[#10B981] text-black px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#059669] cursor-pointer disabled:opacity-60"
+                    >
+                      <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>sync</span>
+                      <span>{isLoading ? 'Actualizando...' : 'Actualizar'}</span>
+                    </button>
+                    <button
+                      onClick={handlePlayAllSequentially}
+                      title="Reproducir todo seguido (todas las subcarpetas)"
+                      className="neo-button bg-[#22c55e] text-black px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#16a34a] cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">playlist_play</span>
+                      Todo (Orden)
+                    </button>
+                    <button
+                      onClick={handlePlayShuffle}
+                      title="Reproducir toda la música en aleatorio"
+                      className="neo-button bg-[#8B5CF6] text-white px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#7c3aed] cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">shuffle</span>
+                      Todo (Suflé)
+                    </button>
+                    <button
+                      onClick={() => setShowEq(!showEq)}
+                      className={`neo-button px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 ${
+                        showEq ? 'bg-[#F59E0B] text-black' : 'bg-[#201f1f] text-[#bbcabf]'
+                      }`}
+                      title="Ecualizador"
+                    >
+                      <span className="material-symbols-outlined text-sm">equalizer</span>
+                      EQ
+                    </button>
+                    <button
+                      onClick={() => setShowDriveGuide(!showDriveGuide)}
+                      className={`neo-button px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 ${
+                        showDriveGuide ? 'bg-[#4edea3] text-black' : 'bg-[#201f1f] text-[#bbcabf]'
+                      }`}
+                      title="Guía de organización de carpetas en Google Drive"
+                    >
+                      <span className="material-symbols-outlined text-sm">folder_special</span>
+                      Guía
+                    </button>
+                  </div>
+                </div>
+
+                {/* View Tabs: Carpetas vs Todas las canciones */}
+                <div className="flex items-center gap-2 border-b-2 border-black pb-2">
+                  <button
+                    onClick={() => setRootTab('folders')}
+                    className={`px-3 py-1.5 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 border-2 border-black transition-all cursor-pointer ${
+                      rootTab === 'folders'
+                        ? 'bg-[#4edea3] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        : 'bg-[#201f1f] text-[#bbcabf] hover:text-white'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-base">folder</span>
+                    Carpetas / Álbumes ({subfolders.length})
+                  </button>
+                  <button
+                    onClick={() => setRootTab('all')}
+                    className={`px-3 py-1.5 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 border-2 border-black transition-all cursor-pointer ${
+                      rootTab === 'all'
+                        ? 'bg-[#4edea3] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        : 'bg-[#201f1f] text-[#bbcabf] hover:text-white'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-base">music_note</span>
+                    Todas las Canciones ({totalRecursiveFiles})
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Drive Organization Guide Drawer */}
             {showDriveGuide && (
               <div className="bg-[#121212] border-3 border-[#4edea3] p-4 flex flex-col gap-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                 <div className="flex items-center justify-between border-b border-[#2b2b2b] pb-2">
@@ -978,36 +1204,140 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               </div>
             )}
 
-            {/* Breadcrumb Navigation */}
-            {folderStack.length > 1 && (
-              <div className="flex items-center gap-1.5 flex-wrap bg-[#201f1f] p-2.5 border-2 border-black font-mono-tech text-xs">
-                <span className="material-symbols-outlined text-[#4edea3] text-base">folder_open</span>
-                {folderStack.map((item, idx) => (
-                  <React.Fragment key={item.id}>
-                    {idx > 0 && <span className="text-[#bbcabf]">/</span>}
-                    <button
-                      onClick={() => jumpToBreadcrumb(idx)}
-                      className={`hover:underline uppercase font-bold ${idx === folderStack.length - 1 ? 'text-[#4edea3]' : 'text-white'}`}
-                    >
-                      {item.name}
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
+            {/* MAIN CONTENT BODY */}
+            {isInsideSubfolder ? (
+              /* --- INSIDE SUBFOLDER: SHOW FOLDER TRACKS & ANY NESTED SUBFOLDERS --- */
+              <div className="flex flex-col gap-3">
+                {/* Nested subfolders if any */}
+                {subfolders.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider">
+                      Subcarpetas internas ({subfolders.length})
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {subfolders.map(sub => (
+                        <div
+                          key={sub.id}
+                          onClick={() => navigateToSubfolder(sub)}
+                          className="border-2 border-black p-2.5 bg-[#1e1e1e] hover:bg-[#252525] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="material-symbols-outlined text-[#8B5CF6] text-lg">folder</span>
+                            <span className="font-bold text-xs text-white uppercase truncate">{sub.name}</span>
+                          </div>
+                          <span className="text-[#4edea3] font-mono-tech text-[11px]">Abrir →</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Subfolders Grid */}
-            {subfolders.length > 0 && (
-              <div className="flex flex-col gap-2">
+                {/* Tracks inside this folder */}
+                {files.length > 0 ? (
+                  <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1">
+                    <div className="flex items-center justify-between mt-1">
+                      <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider">
+                        Canciones en "{currentFolder?.name}" ({files.length})
+                      </h4>
+                      <span className="text-[10px] font-mono-tech text-[#4edea3]">
+                        {files.filter(f => f.isCached).length} en caché
+                      </span>
+                    </div>
+
+                    {files.map((file, idx) => {
+                      const isCurrent = currentTrack?.id === file.id;
+                      return (
+                        <div
+                          key={file.id}
+                          onClick={() => handleSelectTrack(file, idx, files)}
+                          className={`flex items-center justify-between p-3 border-2 border-black cursor-pointer transition-all ${
+                            isCurrent
+                              ? 'bg-[#4edea3] text-black font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                              : 'bg-[#201f1f] text-white hover:bg-[#353534]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 truncate">
+                            <div className={`w-8 h-8 border border-black flex items-center justify-center font-mono-tech text-xs ${isCurrent ? 'bg-black text-[#4edea3]' : 'bg-[#1A1A1A] text-[#bbcabf]'}`}>
+                              {isCurrent && playbackStatus === 'playing' ? (
+                                <span className="material-symbols-outlined text-sm animate-pulse">volume_up</span>
+                              ) : (
+                                idx + 1
+                              )}
+                            </div>
+                            <div className="truncate">
+                              <div className="font-bold text-sm truncate">{file.name}</div>
+                              <div className={`font-mono-tech text-[10px] truncate ${isCurrent ? 'text-black/80' : 'text-[#bbcabf]'}`}>
+                                {file.artist} • {file.album || 'Drive'} • {file.size ? `${Math.round(file.size / 1024 / 1024 * 10) / 10} MB` : 'Cloud Stream'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {file.isCached ? (
+                              <span className="bg-[#10B981] text-black text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black flex items-center gap-1" title="Guardado en caché local">
+                                <span className="material-symbols-outlined text-[10px]">offline_pin</span>
+                                OFFLINE
+                              </span>
+                            ) : (
+                              <span className="bg-[#8B5CF6] text-white text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black flex items-center gap-1" title="Stream desde Google Drive">
+                                <span className="material-symbols-outlined text-[10px]">cloud</span>
+                                DRIVE
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isCurrent && playbackStatus === 'playing') {
+                                  driveAudioEngine.pause();
+                                } else if (isCurrent && playbackStatus === 'paused') {
+                                  driveAudioEngine.resume();
+                                } else {
+                                  handleSelectTrack(file, idx, files);
+                                }
+                              }}
+                              title={isCurrent && playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
+                              aria-label={isCurrent && playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
+                              className={`w-11 h-7 sm:w-12 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
+                                isCurrent && playbackStatus === 'playing'
+                                  ? 'bg-[#181818] text-[#4edea3] shadow-[0_3px_0_0_#000000] hover:-translate-y-[1px] active:translate-y-[3px]'
+                                  : isCurrent && playbackStatus === 'loading'
+                                  ? 'bg-[#F59E0B] text-black shadow-[0_3px_0_0_#b45309]'
+                                  : 'bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] shadow-[0_3px_0_0_#000000] hover:from-[#6df5c1] hover:to-[#43d499] hover:-translate-y-[1px] active:translate-y-[3px]'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-base font-black">
+                                {isCurrent && playbackStatus === 'playing' ? 'pause' : 'play_arrow'}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : isLoading ? (
+                  <div className="py-8 text-center font-mono-tech text-sm text-[#bbcabf]">
+                    Cargando canciones de la carpeta...
+                  </div>
+                ) : (
+                  <div className="py-12 text-center font-mono-tech text-sm text-[#bbcabf] bg-[#201f1f] border-2 border-black p-4">
+                    Esta carpeta no contiene archivos de audio MP3.
+                  </div>
+                )}
+              </div>
+            ) : rootTab === 'folders' ? (
+              /* --- ROOT TAB: FOLDERS / PLAYLISTS --- */
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider">
-                    Subcarpetas / Playlists ({subfolders.length})
+                    Carpetas disponibles ({subfolders.length})
                   </h4>
                   <span className="text-[10px] font-mono-tech text-[#bbcabf]">
-                    Pulsa tarjeta para abrir • Botón ▶ para reproducir
+                    Toca una tarjeta para entrar • Botón ▶ para reproducir
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-2.5 sm:gap-3">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
                   {subfolders.map(sub => {
                     const isSubPlaying =
                       (playingSubfolderId === sub.id || currentTrack?.album === sub.name) &&
@@ -1016,20 +1346,21 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                       (playingSubfolderId === sub.id || currentTrack?.album === sub.name) &&
                       playbackStatus === 'paused';
                     const isSubLoading = loadingSubfolderId === sub.id;
+                    const trackCount = folderTrackCounts[sub.name.trim().toLowerCase()] || 0;
 
                     return (
                       <div
                         key={sub.id}
                         onClick={() => navigateToSubfolder(sub)}
-                        title={`Abrir carpeta: ${sub.name}`}
-                        className={`border-2 border-black p-2.5 sm:p-3 transition-all cursor-pointer group flex items-center justify-between gap-3 ${
+                        title={`Entrar a carpeta: ${sub.name}`}
+                        className={`border-2 border-black p-3 transition-all cursor-pointer group flex items-center justify-between gap-3 ${
                           isSubPlaying
                             ? 'bg-[#201f1f] shadow-[3px_3px_0px_0px_rgba(78,222,163,0.8)] border-[#4edea3]'
                             : 'bg-[#1e1e1e] hover:bg-[#252525] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-black/40 border border-black flex items-center justify-center shrink-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-black/40 border border-black flex items-center justify-center shrink-0">
                             <span className="material-symbols-outlined text-[#8B5CF6] text-xl group-hover:scale-110 transition-transform">
                               folder
                             </span>
@@ -1041,10 +1372,17 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                             >
                               {sub.name}
                             </span>
+                            <div className="font-mono-tech text-[10px] text-[#bbcabf] flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[#4edea3] font-bold">
+                                {trackCount > 0 ? `${trackCount} pistas` : 'Carpeta'}
+                              </span>
+                              <span>•</span>
+                              <span className="group-hover:underline text-white/70">Entrar →</span>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Play Button - Exactly styled like the RADIO play button */}
+                        {/* Dedicated Play Button */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1067,10 +1405,10 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                           aria-label={`Reproducir carpeta ${sub.name}`}
                           className={`w-11 h-7 sm:w-12 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
                             isSubPlaying
-                              ? 'bg-[#181818] text-[#4edea3] shadow-[0_3px_0_0_#000000] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_#000000] active:translate-y-[3px] active:shadow-none'
+                              ? 'bg-[#181818] text-[#4edea3] shadow-[0_3px_0_0_#000000] hover:-translate-y-[1px] active:translate-y-[3px]'
                               : isSubLoading
-                              ? 'bg-[#F59E0B] text-black shadow-[0_3px_0_0_#b45309] hover:-translate-y-[1px] active:translate-y-[3px]'
-                              : 'bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] shadow-[0_3px_0_0_#000000] hover:from-[#6df5c1] hover:to-[#43d499] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_#000000] active:translate-y-[3px] active:shadow-none'
+                              ? 'bg-[#F59E0B] text-black shadow-[0_3px_0_0_#b45309]'
+                              : 'bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] shadow-[0_3px_0_0_#000000] hover:from-[#6df5c1] hover:to-[#43d499] hover:-translate-y-[1px] active:translate-y-[3px]'
                           }`}
                         >
                           {isSubLoading ? (
@@ -1091,101 +1429,175 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                     );
                   })}
                 </div>
-              </div>
-            )}
 
-            {/* Song list */}
-            {displayFiles.length > 0 ? (
-              <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
-                <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider mt-2">
-                  {folderStack.length > 1
-                    ? `Canciones en esta carpeta (${displayFiles.length})`
-                    : `Todas las canciones (${displayFiles.length})`}
-                </h4>
-                {displayFiles.map((file, idx) => {
-                  const isCurrent = currentTrack?.id === file.id;
-                  return (
-                    <div
-                      key={file.id}
-                      onClick={() => handleSelectTrack(file, idx)}
-                      className={`flex items-center justify-between p-3 border-2 border-black cursor-pointer transition-all ${
-                        isCurrent
-                          ? 'bg-[#4edea3] text-black font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                          : 'bg-[#201f1f] text-white hover:bg-[#353534]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 truncate">
-                        <div className={`w-8 h-8 border border-black flex items-center justify-center font-mono-tech text-xs ${isCurrent ? 'bg-black text-[#4edea3]' : 'bg-[#1A1A1A] text-[#bbcabf]'}`}>
-                          {isCurrent && playbackStatus === 'playing' ? (
-                            <span className="material-symbols-outlined text-sm animate-pulse">volume_up</span>
-                          ) : (
-                            idx + 1
-                          )}
-                        </div>
-                        <div className="truncate">
-                          <div className="font-bold text-sm truncate">{file.name}</div>
-                          <div className={`font-mono-tech text-[10px] truncate ${isCurrent ? 'text-black/80' : 'text-[#bbcabf]'}`}>
-                            {file.artist} • {file.album || 'Drive'} • {file.size ? `${Math.round(file.size / 1024 / 1024 * 10) / 10} MB` : 'Cloud Stream'}
+                {/* Loose files in root if any */}
+                {files.length > 0 ? (
+                  <div className="flex flex-col gap-2 mt-4 pt-3 border-t-2 border-black">
+                    <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider">
+                      Canciones sueltas en la raíz ({files.length})
+                    </h4>
+                    <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
+                      {files.map((file, idx) => {
+                        const isCurrent = currentTrack?.id === file.id;
+                        return (
+                          <div
+                            key={file.id}
+                            onClick={() => handleSelectTrack(file, idx, files)}
+                            className={`flex items-center justify-between p-3 border-2 border-black cursor-pointer transition-all ${
+                              isCurrent
+                                ? 'bg-[#4edea3] text-black font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                : 'bg-[#201f1f] text-white hover:bg-[#353534]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 truncate">
+                              <div className={`w-8 h-8 border border-black flex items-center justify-center font-mono-tech text-xs ${isCurrent ? 'bg-black text-[#4edea3]' : 'bg-[#1A1A1A] text-[#bbcabf]'}`}>
+                                {isCurrent && playbackStatus === 'playing' ? (
+                                  <span className="material-symbols-outlined text-sm animate-pulse">volume_up</span>
+                                ) : (
+                                  idx + 1
+                                )}
+                              </div>
+                              <div className="truncate">
+                                <div className="font-bold text-sm truncate">{file.name}</div>
+                                <div className={`font-mono-tech text-[10px] truncate ${isCurrent ? 'text-black/80' : 'text-[#bbcabf]'}`}>
+                                  {file.artist} • {file.album || 'Drive'}
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectTrack(file, idx, files);
+                              }}
+                              className="w-11 h-7 rounded-sm border-2 border-black flex items-center justify-center bg-[#4edea3] text-black"
+                            >
+                              <span className="material-symbols-outlined text-base">play_arrow</span>
+                            </button>
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {file.isCached ? (
-                          <span className="bg-[#10B981] text-black text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black flex items-center gap-1" title="Guardado en caché local (IndexedDB)">
-                            <span className="material-symbols-outlined text-[10px]">offline_pin</span>
-                            OFFLINE
-                          </span>
-                        ) : (
-                          <span className="bg-[#8B5CF6] text-white text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black flex items-center gap-1" title="Stream desde Google Drive">
-                            <span className="material-symbols-outlined text-[10px]">cloud</span>
-                            DRIVE
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isCurrent && playbackStatus === 'playing') {
-                              driveAudioEngine.pause();
-                            } else if (isCurrent && playbackStatus === 'paused') {
-                              driveAudioEngine.resume();
-                            } else {
-                              handleSelectTrack(file, idx);
-                            }
-                          }}
-                          title={isCurrent && playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
-                          aria-label={isCurrent && playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
-                          className={`w-11 h-7 sm:w-12 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
-                            isCurrent && playbackStatus === 'playing'
-                              ? 'bg-[#181818] text-[#4edea3] shadow-[0_3px_0_0_#000000] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_#000000] active:translate-y-[3px] active:shadow-none'
-                              : isCurrent && playbackStatus === 'loading'
-                              ? 'bg-[#F59E0B] text-black shadow-[0_3px_0_0_#b45309]'
-                              : 'bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] shadow-[0_3px_0_0_#000000] hover:from-[#6df5c1] hover:to-[#43d499] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_#000000] active:translate-y-[3px] active:shadow-none'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-base font-black">
-                            {isCurrent && playbackStatus === 'playing' ? 'pause' : 'play_arrow'}
-                          </span>
-                        </button>
-                      </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
-            ) : isLoading ? (
-              <div className="py-8 text-center font-mono-tech text-sm text-[#bbcabf]">
-                Cargando canciones...
-              </div>
-            ) : subfolders.length === 0 ? (
-              <div className="py-12 text-center font-mono-tech text-sm text-[#bbcabf]">
-                {folderStack.length > 1
-                  ? 'Esta carpeta no contiene archivos de audio MP3.'
-                  : 'No se encontraron archivos de audio MP3 en la carpeta /mimusica.'}
+                  </div>
+                ) : (
+                  <div className="mt-2 py-4 px-4 bg-[#141414] border-2 border-black text-center font-mono-tech text-xs text-[#bbcabf] flex items-center justify-center gap-2">
+                    <span className="material-symbols-outlined text-[#4edea3] text-base">info</span>
+                    <span>
+                      Tus {totalRecursiveFiles} canciones están organizadas en las {subfolders.length} carpetas de arriba. Pulsa sobre cualquier carpeta para explorarla o en ▶ para reproducirla.
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="py-6 text-center font-mono-tech text-xs text-[#bbcabf] bg-[#201f1f] border-2 border-black p-3">
-                Selecciona una de las {subfolders.length} subcarpetas de arriba para ver sus canciones.
+              /* --- ROOT TAB: ALL SONGS --- */
+              <div className="flex flex-col gap-3">
+                {/* Search Bar */}
+                <div className="flex items-center gap-2 bg-[#141414] border-2 border-black px-3 py-2">
+                  <span className="material-symbols-outlined text-[#4edea3] text-lg">search</span>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar por título, artista o carpeta..."
+                    className="w-full bg-transparent font-mono-tech text-xs text-white placeholder-[#666] outline-none"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="text-gray-400 hover:text-white text-xs font-mono-tech cursor-pointer"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <h4 className="font-mono-tech text-xs text-[#bbcabf] font-bold uppercase tracking-wider">
+                    Todas las canciones ({filteredAllFiles.length})
+                  </h4>
+                  <span className="text-[10px] font-mono-tech text-[#4edea3]">
+                    {filteredAllFiles.filter(f => f.isCached).length} en caché
+                  </span>
+                </div>
+
+                {filteredAllFiles.length > 0 ? (
+                  <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                    {filteredAllFiles.map((file, idx) => {
+                      const isCurrent = currentTrack?.id === file.id;
+                      return (
+                        <div
+                          key={file.id}
+                          onClick={() => handleSelectTrack(file, idx, filteredAllFiles)}
+                          className={`flex items-center justify-between p-3 border-2 border-black cursor-pointer transition-all ${
+                            isCurrent
+                              ? 'bg-[#4edea3] text-black font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                              : 'bg-[#201f1f] text-white hover:bg-[#353534]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 truncate">
+                            <div className={`w-8 h-8 border border-black flex items-center justify-center font-mono-tech text-xs ${isCurrent ? 'bg-black text-[#4edea3]' : 'bg-[#1A1A1A] text-[#bbcabf]'}`}>
+                              {isCurrent && playbackStatus === 'playing' ? (
+                                <span className="material-symbols-outlined text-sm animate-pulse">volume_up</span>
+                              ) : (
+                                idx + 1
+                              )}
+                            </div>
+                            <div className="truncate">
+                              <div className="font-bold text-sm truncate">{file.name}</div>
+                              <div className={`font-mono-tech text-[10px] truncate ${isCurrent ? 'text-black/80' : 'text-[#bbcabf]'}`}>
+                                {file.artist} • {file.album || 'Drive'} • {file.size ? `${Math.round(file.size / 1024 / 1024 * 10) / 10} MB` : 'Cloud Stream'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {file.isCached ? (
+                              <span className="bg-[#10B981] text-black text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black flex items-center gap-1" title="Guardado en caché local">
+                                <span className="material-symbols-outlined text-[10px]">offline_pin</span>
+                                OFFLINE
+                              </span>
+                            ) : (
+                              <span className="bg-[#8B5CF6] text-white text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black flex items-center gap-1" title="Stream desde Google Drive">
+                                <span className="material-symbols-outlined text-[10px]">cloud</span>
+                                DRIVE
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isCurrent && playbackStatus === 'playing') {
+                                  driveAudioEngine.pause();
+                                } else if (isCurrent && playbackStatus === 'paused') {
+                                  driveAudioEngine.resume();
+                                } else {
+                                  handleSelectTrack(file, idx, filteredAllFiles);
+                                }
+                              }}
+                              title={isCurrent && playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
+                              className={`w-11 h-7 sm:w-12 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
+                                isCurrent && playbackStatus === 'playing'
+                                  ? 'bg-[#181818] text-[#4edea3] shadow-[0_3px_0_0_#000000] hover:-translate-y-[1px] active:translate-y-[3px]'
+                                  : isCurrent && playbackStatus === 'loading'
+                                  ? 'bg-[#F59E0B] text-black shadow-[0_3px_0_0_#b45309]'
+                                  : 'bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] shadow-[0_3px_0_0_#000000] hover:from-[#6df5c1] hover:to-[#43d499] hover:-translate-y-[1px] active:translate-y-[3px]'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-base font-black">
+                                {isCurrent && playbackStatus === 'playing' ? 'pause' : 'play_arrow'}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center font-mono-tech text-xs text-[#bbcabf] bg-[#201f1f] border-2 border-black p-3">
+                    No se encontraron canciones que coincidan con la búsqueda.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1233,7 +1645,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="material-symbols-outlined text-[#4edea3] text-sm">queue_music</span>
                   <span className="font-mono-tech text-xs font-bold text-white uppercase tracking-wider truncate">
-                    Lista de Reproducción
+                    {currentTrack?.album ? `Cola: ${currentTrack.album}` : 'Cola de Reproducción'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
