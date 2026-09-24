@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { audioEngine } from '../services/audioEngine';
+import { driveAudioEngine } from '../services/driveAudioEngine';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 
 interface SettingsModalProps {
@@ -28,6 +29,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       return 5;
     }
   });
+  const [driveCrossfade, setDriveCrossfade] = useState<number>(() => driveAudioEngine.getCrossfadeSeconds());
   const [synthFallback, setSynthFallback] = useState(true);
   const [lowDataMode, setLowDataMode] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
@@ -55,6 +57,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSave = () => {
     try {
       localStorage.setItem('radiostream_fade_mins', fadeOutMins.toString());
+      driveAudioEngine.setCrossfadeSeconds(driveCrossfade);
     } catch {
       // ignore
     }
@@ -204,6 +207,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {mins} min
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Crossfade de Google Drive */}
+          <div className="bg-[#131313] p-3.5 border-2 border-black flex flex-col gap-2">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#4edea3] text-base">shuffle</span>
+                <span className="font-mono-tech text-xs text-white font-bold uppercase">
+                  Crossfade entre canciones de Drive
+                </span>
+              </div>
+              <span className="font-mono-tech text-xs text-[#4edea3] font-bold">
+                {driveCrossfade === 0 ? 'Desactivado' : `${driveCrossfade} Segundos`}
+              </span>
+            </div>
+            <p className="font-mono-tech text-[10px] text-[#bbcabf]">
+              Fundido cruzado continuo y sin silencios entre pistas consecutivas de Google Drive.
+            </p>
+            <div className="grid grid-cols-5 gap-1.5 mt-1">
+              {[
+                { label: 'Off', sec: 0 },
+                { label: '3s', sec: 3 },
+                { label: '5s', sec: 5 },
+                { label: '8s', sec: 8 },
+                { label: '12s', sec: 12 },
+              ].map(item => {
+                const isActive = driveCrossfade === item.sec;
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      setDriveCrossfade(item.sec);
+                      driveAudioEngine.setCrossfadeSeconds(item.sec);
+                    }}
+                    className={`py-1.5 font-mono-tech text-xs font-bold border-2 border-black uppercase cursor-pointer transition-all ${
+                      isActive
+                        ? 'bg-[#4edea3] text-[#003824] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        : 'bg-[#201f1f] text-white hover:bg-[#353534]'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

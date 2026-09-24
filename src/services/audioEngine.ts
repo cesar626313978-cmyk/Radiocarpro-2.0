@@ -34,6 +34,8 @@ class RadioAudioEngine {
   private freezeWatchdogTimer: number | null = null;
   private unregisterHeartbeat: (() => void) | null = null;
   private lastAudioPosition = -1;
+  private lastProgressTimestamp = Date.now();
+  private waitingDebounceTimer: number | null = null;
   private stallCount = 0;
 
   constructor() {
@@ -153,27 +155,49 @@ class RadioAudioEngine {
       }
 
       // Buffer & Event Listeners
+      audio.ontimeupdate = () => {
+        this.lastProgressTimestamp = Date.now();
+        this.stallCount = 0;
+      };
+
+      audio.onprogress = () => {
+        this.lastProgressTimestamp = Date.now();
+      };
+
       audio.onwaiting = () => {
-        if (this.shouldBePlaying) {
-          this.setStatus('buffering', 'Cargando búfer de señal...');
+        if (this.shouldBePlaying && this.status === 'playing') {
+          if (this.waitingDebounceTimer !== null) {
+            window.clearTimeout(this.waitingDebounceTimer);
+          }
+          // Debounce 1500ms so cellular fluctuations do not flicker status or reload stream
+          this.waitingDebounceTimer = window.setTimeout(() => {
+            if (this.shouldBePlaying && this.status === 'playing' && this.audio && !this.audio.paused) {
+              this.setStatus('buffering', 'Cargando búfer de señal...');
+            }
+          }, 1500);
         }
       };
 
       audio.onstalled = () => {
-        if (this.shouldBePlaying && this.status === 'playing') {
-          console.warn('[RadioAudioEngine] Stream stalled (cobertura débil). Iniciando recuperación...');
-          this.setStatus('buffering', 'Búfer agotado. Recuperando señal...');
-          this.scheduleAutoReconnect();
-        }
+        // NOTE: On live HTTP streams, Chromium fires 'stalled' normally when its internal
+        // buffer is full and TCP socket read is temporarily paused.
+        // DO NOT reconnect or toggle status to buffering on 'stalled', as this causes
+        // the playback to stutter and reload every few seconds!
+        this.lastProgressTimestamp = Date.now();
       };
 
       audio.onplaying = () => {
+        if (this.waitingDebounceTimer !== null) {
+          window.clearTimeout(this.waitingDebounceTimer);
+          this.waitingDebounceTimer = null;
+        }
         if (this.shouldBePlaying) {
           this.clearConnectionTimeout();
           this.cancelReconnectTimer();
           this.reconnectAttempts = 0;
           this.stallCount = 0;
           this.lastAudioPosition = audio.currentTime;
+          this.lastProgressTimestamp = Date.now();
           this.setStatus('playing');
         }
       };
@@ -289,34 +313,42 @@ class RadioAudioEngine {
 
   private startFreezeWatchdog() {
     this.stopFreezeWatchdog();
+    this.lastProgressTimestamp = Date.now();
+    this.lastAudioPosition = this.audio ? this.audio.currentTime : -1;
 
-    // 1. Hook into Web Worker heartbeat to guarantee execution even when Tesla minimizes the browser
+    // Hook into Web Worker heartbeat to guarantee execution even when browser is minimized in the car
     this.unregisterHeartbeat = teslaBackgroundService.registerHeartbeat(() => {
       this.checkFreezeWatchdogTick();
     });
-
-    // 2. Also keep regular interval for foreground execution
-    this.freezeWatchdogTimer = window.setInterval(() => {
-      this.checkFreezeWatchdogTick();
-    }, 2500);
   }
 
   private checkFreezeWatchdogTick() {
     if (!this.shouldBePlaying || this.status !== 'playing' || !this.audio) return;
 
+    // Do nothing if audio is intentionally paused or ended
+    if (this.audio.paused || this.audio.ended) return;
+
     const currentPos = this.audio.currentTime;
-    // If position hasn't advanced while playing, signal has frozen
-    if (Math.abs(currentPos - this.lastAudioPosition) < 0.05 && !this.audio.paused && !this.audio.ended) {
-      this.stallCount++;
-      if (this.stallCount >= 3) {
-        console.warn('[RadioAudioEngine] Watchdog detectó flujo congelado en segundo plano (Tesla minimizado). Reconectando...');
-        this.stallCount = 0;
-        this.setStatus('buffering', 'Recuperando flujo de audio...');
-        this.scheduleAutoReconnect();
-      }
-    } else {
+
+    // If audio position has advanced or audio has enough data buffered, playback is healthy
+    if (Math.abs(currentPos - this.lastAudioPosition) >= 0.1 || (this.audio.readyState >= 2 && !this.audio.paused)) {
       this.lastAudioPosition = currentPos;
+      this.lastProgressTimestamp = Date.now();
       this.stallCount = 0;
+      return;
+    }
+
+    // If position hasn't advanced, calculate freeze duration
+    const freezeDuration = Date.now() - this.lastProgressTimestamp;
+
+    // Only intervene if genuinely frozen with NO audio progress for at least 25 seconds
+    // and the device is currently online
+    if (freezeDuration > 25000 && (typeof navigator === 'undefined' || navigator.onLine)) {
+      console.warn(`[RadioAudioEngine] Flujo congelado detectado (${Math.round(freezeDuration / 1000)}s sin avance). Reconectando...`);
+      this.lastProgressTimestamp = Date.now();
+      this.lastAudioPosition = -1;
+      this.setStatus('buffering', 'Recuperando flujo de audio...');
+      this.scheduleAutoReconnect();
     }
   }
 

@@ -65,7 +65,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
               const pairedUserData = {
                 uid: data.uid || `paired-${data.userEmail || Date.now()}`,
                 email: data.userEmail || '',
-                displayName: data.userDisplayName || (data.userEmail ? data.userEmail.split('@')[0] : 'Tesla User'),
+                displayName: data.userDisplayName || (data.userEmail ? data.userEmail.split('@')[0] : 'Usuario Coche'),
                 photoURL: data.userPhoto || '',
                 isPairedViaTesla: true,
               };
@@ -133,11 +133,11 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
               <h2 className="text-xl font-black uppercase tracking-tight text-white flex items-center gap-2">
                 Conectar Gmail & Google Drive
                 <span className="bg-[#4edea3] text-black text-[10px] font-mono-tech font-bold px-2 py-0.5 uppercase">
-                  Tesla Ready
+                  Modo Coche Ready
                 </span>
               </h2>
               <p className="font-mono-tech text-xs text-[#999]">
-                Solución optimizada para el navegador de Tesla Model 3 / Highland
+                Solución optimizada para el navegador y pantalla del coche
               </p>
             </div>
           </div>
@@ -185,7 +185,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
           <div className="bg-[#4edea3] text-black p-4 border-3 border-black neo-shadow flex items-center gap-3 animate-pulse">
             <span className="material-symbols-outlined text-3xl font-black">check_circle</span>
             <div>
-              <div className="font-black text-sm uppercase">¡Tesla Vinculado Correctamente!</div>
+              <div className="font-black text-sm uppercase">¡Coche Vinculado Correctamente!</div>
               <div className="font-mono-tech text-xs">Conectado a Google Drive con {pairedUser}. Sincronizando canciones...</div>
             </div>
           </div>
@@ -199,7 +199,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
           </div>
         )}
 
-        {/* TAB 1: QR CODE PAIRING (Recommended for Tesla) */}
+        {/* TAB 1: QR CODE PAIRING (Recommended for Car) */}
         {activeTab === 'qr' && (
           <div className="flex flex-col md:flex-row gap-6 items-center">
             {/* QR box */}
@@ -226,10 +226,10 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
               <div className="bg-[#1f1f1f] border-2 border-black p-3">
                 <div className="flex items-center gap-2 text-[#4edea3] font-bold text-xs uppercase mb-1 font-mono-tech">
                   <span className="material-symbols-outlined text-base">verified</span>
-                  ¿Por qué esta es la mejor opción en Tesla?
+                  ¿Por qué esta es la mejor opción en el coche?
                 </div>
                 <p className="font-mono-tech text-xs text-[#ccc] leading-relaxed">
-                  El navegador de Tesla bloquea las ventanas emergentes (popups) de Google abriéndolas en pestañas separadas que no pueden comunicarse entre sí. Al escanear este código con tu teléfono móvil, tu cuenta se autoriza en <strong className="text-white">1 segundo</strong> y la música se activa de inmediato en la pantalla del coche.
+                  El navegador del coche suele bloquear o restringir las ventanas emergentes (popups) de Google al abrirlas en pestañas aisladas. Al escanear este código con tu teléfono móvil, tu cuenta se autoriza en <strong className="text-white">1 segundo</strong> y la música se activa de inmediato en la pantalla del coche.
                 </p>
               </div>
 
@@ -240,11 +240,11 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
                 </div>
                 <div className="flex items-start gap-2 bg-[#181818] p-2 border border-[#333]">
                   <span className="w-5 h-5 bg-[#4edea3] text-black font-black flex items-center justify-center text-[11px] shrink-0">2</span>
-                  <span>Toca el enlace en tu móvil y pulsa <strong className="text-[#4edea3]">"Autorizar en mi Tesla"</strong>.</span>
+                  <span>Toca el enlace en tu móvil y pulsa <strong className="text-[#4edea3]">"Autorizar en mi Coche"</strong>.</span>
                 </div>
                 <div className="flex items-start gap-2 bg-[#181818] p-2 border border-[#333]">
                   <span className="w-5 h-5 bg-[#4edea3] text-black font-black flex items-center justify-center text-[11px] shrink-0">3</span>
-                  <span>Esta pantalla se conectará automáticamente sin que tengas que teclear nada en el coche.</span>
+                  <span>Esta pantalla se conectará automáticamente sin que tengas que teclear contraseñas en el coche.</span>
                 </div>
               </div>
 
@@ -266,13 +266,13 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
               <div>
                 <h3 className="font-bold text-sm uppercase text-white">Redirección en la misma ventana</h3>
                 <p className="font-mono-tech text-xs text-[#bbb] mt-1">
-                  En lugar de abrir una pestaña nueva (que en Tesla queda desconectada), este método navegará directamente en esta misma pestaña hacia la página oficial de Google y volverá automáticamente con tus canciones y favoritos cargados.
+                  En lugar de abrir una pestaña nueva (que en el navegador del coche puede quedar desconectada), este método navegará directamente en esta misma pestaña hacia la página oficial de Google y volverá automáticamente con tus canciones y favoritos cargados.
                 </p>
               </div>
             </div>
 
             <div className="p-3 bg-black/60 border border-[#333] font-mono-tech text-xs text-[#aaa]">
-              💡 <strong>Nota para conductores de Tesla:</strong> Al regresar de Google, la aplicación guardará la sesión en el almacenamiento local para que no tengas que repetir este proceso cada vez que entres al coche.
+              💡 <strong>Nota para conductores en el coche:</strong> Al regresar de Google, la aplicación guardará la sesión en el almacenamiento local para que no tengas que repetir este proceso cada vez que entres al coche.
             </div>
 
             <button
@@ -320,7 +320,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
 
         {/* Footer */}
         <div className="border-t border-[#262626] pt-3 flex items-center justify-between text-[11px] font-mono-tech text-[#777]">
-          <span>RadioStream Car Edition • Tesla Model 3 Highland Compatible</span>
+          <span>RadioStream Car Edition • Compatible con Pantallas de Coche</span>
           <button onClick={onClose} className="text-[#aaa] hover:text-white underline cursor-pointer">
             Cerrar ventana
           </button>

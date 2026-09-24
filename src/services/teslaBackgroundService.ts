@@ -118,7 +118,15 @@ class TeslaBackgroundService {
       this.worker.postMessage('start');
     }
 
-    this.playSilentAnchor();
+    // Do NOT play silent audio concurrently while real audio (radio or drive) is actively playing.
+    // The active audio element already keeps Chromium's media pipeline alive (hasAudioOutput = true).
+    // Playing two audio elements concurrently confuses car sound mixers (PulseAudio/ALSA) and
+    // causes dual-stream conflicts.
+    if (this.silentAudio) {
+      try {
+        this.silentAudio.pause();
+      } catch {}
+    }
     this.requestWakeLock();
   }
 

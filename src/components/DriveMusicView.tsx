@@ -3,7 +3,7 @@ import { DriveAudioFile, DrivePlaybackStatus } from '../types/drive';
 import { googleDriveService } from '../services/googleDriveService';
 import { driveAudioEngine } from '../services/driveAudioEngine';
 import { driveCacheService } from '../services/driveCacheService';
-import { User } from '../services/firebase';
+import { User, isTeslaBrowser } from '../services/firebase';
 
 interface DriveMusicViewProps {
   onSwitchToRadio: () => void;
@@ -40,11 +40,12 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
 
-  // Equalizer state
+  // Equalizer & Guide state
   const [eqLow, setEqLow] = useState<number>(0);
   const [eqMid, setEqMid] = useState<number>(0);
   const [eqHigh, setEqHigh] = useState<number>(0);
   const [showEq, setShowEq] = useState<boolean>(false);
+  const [showDriveGuide, setShowDriveGuide] = useState<boolean>(false);
 
   const [folderInput, setFolderInput] = useState<string>(() => {
     try {
@@ -63,6 +64,8 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   const [loadingSubfolderId, setLoadingSubfolderId] = useState<string | null>(null);
   const [playingSubfolderId, setPlayingSubfolderId] = useState<string | null>(null);
   const [activePlaylist, setActivePlaylist] = useState<DriveAudioFile[]>(() => driveAudioEngine.getPlaylist());
+  const [isConnectingDrive, setIsConnectingDrive] = useState<boolean>(false);
+  const [refreshSuccessMessage, setRefreshSuccessMessage] = useState<string | null>(null);
   const activeTrackRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-scroll the active track inside the scrollable playlist window
@@ -71,6 +74,20 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       activeTrackRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }, [currentTrack?.id]);
+
+  // Dynamic token subscription: auto-detect when Drive connects or disconnects
+  useEffect(() => {
+    const unsub = googleDriveService.onTokenChange(hasTok => {
+      setIsAuthenticated(hasTok);
+      if (hasTok) {
+        const cached = driveCacheService.getCachedLibrarySync();
+        if (!cached || !cached.files || cached.files.length === 0) {
+          loadMusicFolder(undefined, false);
+        }
+      }
+    });
+    return unsub;
+  }, []);
 
   // Check auth state on mount & use instant cache without blocking network rescan
   useEffect(() => {
@@ -266,6 +283,68 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     }
   };
 
+  const handleConnectDrive = async () => {
+    setIsConnectingDrive(true);
+    setErrorMessage(null);
+    setRefreshSuccessMessage(null);
+    try {
+      const isCar = isTeslaBrowser();
+      if (isCar) {
+        googleDriveService.redirectToOAuth(user?.email);
+        return;
+      }
+      await googleDriveService.authenticate(user?.email);
+      setIsAuthenticated(true);
+      await loadMusicFolder(undefined, true);
+    } catch (err: any) {
+      console.warn('Drive popup auth failed, attempting redirect:', err);
+      try {
+        googleDriveService.redirectToOAuth(user?.email);
+      } catch (redirErr: any) {
+        setErrorMessage(err.message || 'Error al conectar con Google Drive');
+      }
+    } finally {
+      setIsConnectingDrive(false);
+    }
+  };
+
+  const handleRefreshFolders = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    setRefreshSuccessMessage(null);
+    try {
+      await loadMusicFolder(currentFolderId || undefined, true);
+      setRefreshSuccessMessage('¡Carpetas y archivos de /mimusica actualizados!');
+      setTimeout(() => {
+        setRefreshSuccessMessage(null);
+      }, 4000);
+    } catch (err: any) {
+      console.error('Error refreshing folders:', err);
+      setErrorMessage(err.message || 'Error al actualizar carpetas de Google Drive');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDisconnectDrive = async () => {
+    googleDriveService.clearAccessToken();
+    await driveCacheService.clearCachedLibrary();
+    setIsAuthenticated(false);
+    setFiles([]);
+    setSubfolders([]);
+    setAllRecursiveFiles([]);
+    setTotalRecursiveFiles(0);
+    setFolderStack([]);
+    setCurrentTrack(null);
+    setFolderStatus('Desconectado de Google Drive');
+    if (activeSource === 'drive') {
+      onSwitchToRadio();
+    }
+    if (onDisconnect) {
+      onDisconnect();
+    }
+  };
+
   const navigateToSubfolder = async (sub: { id: string; name: string }) => {
     const token = googleDriveService.getToken();
     if (!token) return;
@@ -422,56 +501,136 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
 
   return (
     <div className="flex flex-col gap-6 w-full pb-32">
-      {/* Header bar switcher */}
+      {/* Top Drive Connection Status & Folder Management Bar */}
       <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-[#1A1A1A] border-3 border-black p-4 neo-shadow">
         <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 bg-[#201f1f] border-2 border-black flex items-center justify-center shrink-0">
+            <span className={`material-symbols-outlined text-2xl ${isAuthenticated ? 'text-[#4edea3]' : 'text-[#f59e0b]'}`}>
+              {isAuthenticated ? 'cloud_done' : 'cloud_off'}
+            </span>
+          </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="font-black text-sm sm:text-base md:text-lg text-white tracking-tight uppercase truncate">Mi Música (Google Drive)</h1>
-              <span className="bg-[#10B981] text-black text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black uppercase shrink-0">
-                CLOUD SYNC
-              </span>
+              <h1 className="font-black text-sm sm:text-base md:text-lg text-white tracking-tight uppercase truncate">
+                Música en Google Drive (/mimusica)
+              </h1>
+              {isAuthenticated ? (
+                <span className="bg-[#10B981] text-black text-[10px] font-mono-tech font-bold px-2 py-0.5 border border-black uppercase shrink-0 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+                  CONECTADO A DRIVE
+                </span>
+              ) : (
+                <span className="bg-[#f59e0b] text-black text-[10px] font-mono-tech font-bold px-2 py-0.5 border border-black uppercase shrink-0">
+                  DESCONECTADO DE DRIVE
+                </span>
+              )}
             </div>
-            <p className="font-mono-tech text-xs text-[#bbcabf] truncate mt-0.5">{folderStatus}</p>
+            <p className="font-mono-tech text-xs text-[#bbcabf] truncate mt-0.5">
+              {isAuthenticated
+                ? `${folderStatus}${user?.email ? ` • ${user.email}` : ''}`
+                : 'Conexión independiente de Gmail. Pulsa Conectar Google Drive para cargar tu colección.'}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
-          {!isAuthenticated ? (
-            <div className="flex items-center gap-2 font-mono-tech text-xs text-[#bbcabf] bg-[#141414] px-3 py-2 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-              <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
-              <span className="font-bold uppercase text-[11px] text-[#e5e2e1]">Desconectado</span>
-              <span className="text-[#86948a] hidden md:inline">• Conéctate desde la barra superior</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
+        {/* Action controls */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0 w-full xl:w-auto justify-start xl:justify-end">
+          {isAuthenticated ? (
+            <>
               <button
-                onClick={() => loadMusicFolder(undefined, true)}
+                onClick={handleRefreshFolders}
                 disabled={isLoading}
-                className="neo-button bg-[#8B5CF6] text-white px-3.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1.5 hover:bg-[#7c3aed] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                title="Volver a escanear Google Drive para sincronizar canciones nuevas"
+                className="neo-button bg-[#10B981] text-black px-3.5 py-2 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 hover:bg-[#059669] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60"
+                title="Volver a escanear Google Drive para sincronizar carpetas y canciones nuevas"
               >
                 <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>sync</span>
-                {isLoading ? 'Escaneando...' : 'Sincronizar'}
+                <span>{isLoading ? 'Actualizando...' : 'Actualizar Carpetas'}</span>
               </button>
+
               <button
-                onClick={async () => {
-                  googleDriveService.clearAccessToken();
-                  await driveCacheService.clearCachedLibrary();
-                  setIsAuthenticated(false);
-                  if (onDisconnect) {
-                    onDisconnect();
-                  }
-                }}
-                className="p-1.5 bg-[#262626] border-2 border-black hover:bg-[#333] text-[#bbb] hover:text-white cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                title="Desconectar o cambiar cuenta"
+                onClick={() => setShowDriveGuide(!showDriveGuide)}
+                className={`neo-button px-3 py-2 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 cursor-pointer border-2 border-black ${
+                  showDriveGuide ? 'bg-[#4edea3] text-black' : 'bg-[#201f1f] text-[#bbcabf] hover:text-white'
+                }`}
+                title="Ver guía de organización de carpetas /mimusica"
+              >
+                <span className="material-symbols-outlined text-sm">folder_special</span>
+                <span className="hidden sm:inline">Guía Drive</span>
+              </button>
+
+              <button
+                onClick={() => setShowEq(!showEq)}
+                className={`neo-button px-3 py-2 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 cursor-pointer border-2 border-black ${
+                  showEq ? 'bg-[#F59E0B] text-black' : 'bg-[#201f1f] text-[#bbcabf] hover:text-white'
+                }`}
+                title="Ecualizador de audio"
+              >
+                <span className="material-symbols-outlined text-sm">equalizer</span>
+                <span>EQ</span>
+              </button>
+
+              <button
+                onClick={handleDisconnectDrive}
+                className="neo-button bg-[#262626] border-2 border-black hover:bg-[#dc2626] text-[#bbb] hover:text-white px-2.5 py-2 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 font-mono-tech text-xs font-bold"
+                title="Desconectar acceso a Google Drive (tu cuenta de Gmail y favoritos de radio se mantienen)"
               >
                 <span className="material-symbols-outlined text-sm">logout</span>
+                <span className="hidden sm:inline">Desconectar Drive</span>
               </button>
-            </div>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleConnectDrive}
+                disabled={isConnectingDrive}
+                className="neo-button bg-[#4edea3] text-[#003824] px-4 py-2 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 hover:bg-[#38c98e] cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60"
+                title="Iniciar sesión en Google Drive para reproducir archivos"
+              >
+                <span className={`material-symbols-outlined text-base ${isConnectingDrive ? 'animate-spin' : ''}`}>
+                  {isConnectingDrive ? 'sync' : 'key'}
+                </span>
+                <span>{isConnectingDrive ? 'Conectando...' : 'Conectar Google Drive'}</span>
+              </button>
+
+              {triggerCarPairing && (
+                <button
+                  type="button"
+                  onClick={triggerCarPairing}
+                  className="neo-button bg-[#8B5CF6] text-white px-3 py-2 font-mono-tech text-xs font-bold uppercase flex items-center gap-1.5 hover:bg-[#7c3aed] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  title="Vincular desde el móvil escaneando código QR"
+                >
+                  <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
+                  <span className="hidden sm:inline">Vincular Coche (QR)</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowDriveGuide(!showDriveGuide)}
+                className={`neo-button px-3 py-2 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 cursor-pointer border-2 border-black ${
+                  showDriveGuide ? 'bg-[#4edea3] text-black' : 'bg-[#201f1f] text-[#bbcabf] hover:text-white'
+                }`}
+                title="Ver guía de carpetas /mimusica"
+              >
+                <span className="material-symbols-outlined text-sm">folder_special</span>
+                <span>Guía Drive</span>
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Success notification banner */}
+      {refreshSuccessMessage && (
+        <div className="bg-[#10B981] text-black font-mono-tech text-xs font-bold px-4 py-3 border-3 border-black neo-shadow flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-base">check_circle</span>
+            <span>{refreshSuccessMessage}</span>
+          </div>
+          <button onClick={() => setRefreshSuccessMessage(null)} className="hover:opacity-75">
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      )}
 
       {/* File reading progress bar inside /mimusica */}
       <div className="bg-[#1A1A1A] border-3 border-black p-4 neo-shadow flex flex-col gap-3">
@@ -518,37 +677,55 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       {!isAuthenticated && (
         <div className="bg-[#1A1A1A] border-3 border-black neo-shadow p-6 sm:p-8 text-center flex flex-col items-center justify-center gap-6">
           <div className="w-16 h-16 bg-[#201f1f] border-3 border-black flex items-center justify-center text-[#4edea3]">
-            <span className="material-symbols-outlined text-4xl">cloud_sync</span>
+            <span className="material-symbols-outlined text-4xl">folder_open</span>
           </div>
           <div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">Sincroniza tu música de Google Drive</h2>
+            <div className="inline-flex items-center gap-2 bg-[#141414] px-3 py-1 border border-black mb-3">
+              <span className="w-2 h-2 rounded-full bg-[#f59e0b]"></span>
+              <span className="font-mono-tech text-xs font-bold uppercase tracking-wider text-[#e5e2e1]">
+                Google Drive no conectado
+              </span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">
+              Tus Archivos de /mimusica en Google Drive
+            </h2>
             <p className="font-mono-tech text-xs sm:text-sm text-[#bbcabf] max-w-xl mt-2 mx-auto leading-relaxed">
-              Reproduce tus archivos MP3, listas y álbumes de Google Drive con reproducción en segundo plano y ecualizador integrado. Diseñado especialmente para la pantalla y el navegador de tu <strong className="text-white">coche</strong>.
+              La conexión con Google Drive es totalmente independiente de tu cuenta de Gmail para la radio. Puedes escuchar la radio y tus emisoras favoritas sin conectar Drive, o conectar Drive aquí para acceder a tu colección musical personal.
             </p>
+          </div>
+
+          {/* Action buttons inside MUSIC view */}
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <button
+              onClick={handleConnectDrive}
+              disabled={isConnectingDrive}
+              className="neo-button bg-[#4edea3] text-[#003824] px-6 py-3.5 font-mono-tech text-xs sm:text-sm font-black uppercase flex items-center gap-2 hover:bg-[#38c98e] cursor-pointer shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60"
+            >
+              <span className={`material-symbols-outlined text-lg ${isConnectingDrive ? 'animate-spin' : ''}`}>
+                {isConnectingDrive ? 'sync' : 'key'}
+              </span>
+              <span>{isConnectingDrive ? 'Conectando con Google Drive...' : 'Conectar Google Drive'}</span>
+            </button>
+
+            {triggerCarPairing && (
+              <button
+                type="button"
+                onClick={triggerCarPairing}
+                className="neo-button bg-[#8B5CF6] text-white px-5 py-3.5 font-mono-tech text-xs sm:text-sm font-bold uppercase flex items-center gap-2 hover:bg-[#7c3aed] cursor-pointer shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+              >
+                <span className="material-symbols-outlined text-base">qr_code_scanner</span>
+                <span>Vincular Coche (QR Móvil)</span>
+              </button>
+            )}
           </div>
 
           {/* Access / Action Card */}
           <div className="bg-[#141414] border-2 border-black p-4 max-w-2xl w-full text-left font-mono-tech text-xs text-[#bbcabf] flex flex-col sm:flex-row items-start gap-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
             <span className="material-symbols-outlined text-[#4edea3] text-2xl shrink-0 mt-0.5">info</span>
             <div className="flex-1 flex flex-col gap-2">
-              <span className="text-white font-bold uppercase text-xs tracking-wide">Acceso centralizado en la cabecera</span>
+              <span className="text-white font-bold uppercase text-xs tracking-wide">Acceso bajo demanda para tu música</span>
               <p className="text-[12px] text-[#bbcabf] leading-relaxed">
-                Utiliza el botón de acceso de Google o <strong className="text-[#4edea3]">Vincular Coche (QR)</strong> situado en la barra superior para iniciar sesión y sincronizar tu colección.
-              </p>
-              {triggerCarPairing && (
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={triggerCarPairing}
-                    className="neo-button bg-[#4edea3] text-black px-3 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1.5 hover:bg-[#3bc791] cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
-                    Abrir Vincular Coche (QR)
-                  </button>
-                </div>
-              )}
-              <p className="text-[11px] text-[#86948a] leading-relaxed border-t border-[#262626] pt-1.5">
-                💡 En el navegador del coche, el emparejamiento por código QR desde el móvil evita bloqueos de pestañas emergentes y autoriza en 1 segundo.
+                Pulsa <strong className="text-[#4edea3]">Conectar Google Drive</strong> arriba para autorizar la lectura de tu carpeta <strong className="text-white">/mimusica</strong>. Si estás en el coche, también puedes usar el botón <strong className="text-[#c4b5fd]">Vincular Coche (QR Móvil)</strong> para autorizar al instante desde tu teléfono sin contraseñas en pantalla.
               </p>
             </div>
           </div>
@@ -656,6 +833,15 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               </h3>
               <div className="flex items-center gap-2 flex-wrap">
                 <button
+                  onClick={handleRefreshFolders}
+                  disabled={isLoading}
+                  title="Actualizar y re-escanear carpetas y archivos de /mimusica"
+                  className="neo-button bg-[#10B981] text-black px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#059669] cursor-pointer disabled:opacity-60"
+                >
+                  <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>sync</span>
+                  <span>{isLoading ? 'Actualizando...' : 'Actualizar Carpetas'}</span>
+                </button>
+                <button
                   onClick={handlePlayCurrentFolderSequential}
                   title="Reproducir solo la carpeta actual en orden"
                   className="neo-button bg-[#4edea3] text-black px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 hover:bg-[#3bc791] cursor-pointer"
@@ -692,12 +878,79 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                   className={`neo-button px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 ${
                     showEq ? 'bg-[#F59E0B] text-black' : 'bg-[#201f1f] text-[#bbcabf]'
                   }`}
+                  title="Ecualizador"
                 >
                   <span className="material-symbols-outlined text-sm">equalizer</span>
                   EQ
                 </button>
+                <button
+                  onClick={() => setShowDriveGuide(!showDriveGuide)}
+                  className={`neo-button px-2.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 ${
+                    showDriveGuide ? 'bg-[#4edea3] text-black' : 'bg-[#201f1f] text-[#bbcabf]'
+                  }`}
+                  title="Ver cómo organizar carpetas y listas de reproducción en Google Drive"
+                >
+                  <span className="material-symbols-outlined text-sm">folder_special</span>
+                  Guía Drive
+                </button>
               </div>
             </div>
+
+            {/* Drive Organization Guide Drawer (Visible anytime on request) */}
+            {showDriveGuide && (
+              <div className="bg-[#121212] border-3 border-[#4edea3] p-4 flex flex-col gap-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                <div className="flex items-center justify-between border-b border-[#2b2b2b] pb-2">
+                  <div className="flex items-center gap-2 text-[#4edea3] font-black text-xs uppercase font-mono-tech">
+                    <span className="material-symbols-outlined text-base">account_tree</span>
+                    <span>Organización de Carpetas y Listas en Google Drive</span>
+                  </div>
+                  <button
+                    onClick={() => setShowDriveGuide(false)}
+                    className="text-gray-400 hover:text-white cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono-tech">
+                  <div className="bg-[#1a1a1a] p-3 border border-[#333]">
+                    <div className="text-white font-bold mb-1 flex items-center gap-1.5">
+                      <span className="w-4 h-4 bg-[#4edea3] text-black font-black flex items-center justify-center text-[10px]">1</span>
+                      Carpeta raíz: <span className="text-[#4edea3]">/mimusica</span>
+                    </div>
+                    <p className="text-[#bbb] text-[11px] leading-relaxed">
+                      Crea la carpeta <strong className="text-white">mimusica</strong> en la raíz de Google Drive (Mi unidad). El reproductor la escaneará y sincronizará automáticamente.
+                    </p>
+                  </div>
+                  <div className="bg-[#1a1a1a] p-3 border border-[#333]">
+                    <div className="text-white font-bold mb-1 flex items-center gap-1.5">
+                      <span className="w-4 h-4 bg-[#06B6D4] text-black font-black flex items-center justify-center text-[10px]">2</span>
+                      Subcarpetas = Listas de Reproducción
+                    </div>
+                    <p className="text-[#bbb] text-[11px] leading-relaxed">
+                      Cada subcarpeta que crees dentro de <strong className="text-white">mimusica</strong> actuará como un álbum o lista independiente navegable con un clic.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-black border border-[#333] p-3 font-mono text-[11px] text-[#e5e5e5] overflow-x-auto">
+                  <pre className="leading-relaxed">
+{`📁 Mi unidad (Google Drive)
+  └── 📁 mimusica                   ← Carpeta principal de música
+        ├── 📁 Rock Clásico         ← Lista de reproducción 1
+        │     ├── Thunderstruck.mp3
+        │     └── Back_In_Black.mp3
+        ├── 📁 Música de Viaje      ← Lista de reproducción 2
+        │     ├── Road_Trip.mp3
+        │     └── Highway_Star.m4a
+        ├── 📁 Pop & Chill          ← Lista de reproducción 3
+        │     ├── track01.mp3
+        │     └── track02.flac
+        └── Cancion_Suelta.mp3      ← Visible en la lista general`}
+                  </pre>
+                </div>
+              </div>
+            )}
 
             {/* Equalizer Drawer */}
             {showEq && (

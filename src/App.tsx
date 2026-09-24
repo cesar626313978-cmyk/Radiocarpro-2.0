@@ -12,6 +12,7 @@ import { DriveMusicView } from './components/DriveMusicView';
 import { TuningModal } from './components/TuningModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ShaderBackground } from './components/ShaderBackground';
+import { RealisticSpaceCosmos } from './components/RealisticSpaceCosmos';
 import { CarModeView } from './components/CarModeView';
 import { TeslaPairingModal } from './components/TeslaPairingModal';
 import { MobilePairingView } from './components/MobilePairingView';
@@ -413,7 +414,7 @@ export default function App() {
               const recoveredUser = {
                 uid: `paired-${info.email || Date.now()}`,
                 email: info.email || '',
-                displayName: info.displayName || info.email?.split('@')[0] || 'Tesla User',
+                displayName: info.displayName || info.email?.split('@')[0] || 'Usuario Coche',
                 photoURL: info.photoURL || '',
                 isPairedViaTesla: true,
               };
@@ -607,7 +608,7 @@ export default function App() {
       return prev;
     });
 
-    if (isDriveConnected && favorites.includes(station.id)) {
+    if (favorites.includes(station.id)) {
       setFavoriteStationsMap(prev => ({
         ...prev,
         [station.id]: station,
@@ -761,9 +762,6 @@ export default function App() {
   };
 
   const favoriteStationObjects = useMemo(() => {
-    if (!isDriveConnected) {
-      return [];
-    }
     return favorites
       .map(id => {
         return (
@@ -773,11 +771,10 @@ export default function App() {
         );
       })
       .filter((s): s is RadioStation => Boolean(s));
-  }, [isDriveConnected, favorites, favoriteStationsMap, stations]);
+  }, [favorites, favoriteStationsMap, stations]);
 
   // Synchronize favorites array IDs with valid station objects so counts never desync
   useEffect(() => {
-    if (!isDriveConnected) return;
     const validIds = favoriteStationObjects.map(s => s.id);
     if (validIds.length > 0 && (favorites.length !== validIds.length || favorites.some((id, i) => id !== validIds[i]))) {
       setFavorites(validIds);
@@ -787,7 +784,7 @@ export default function App() {
         localStorage.setItem('radiostream_favs', JSON.stringify(validIds));
       } catch {}
     }
-  }, [isDriveConnected, favoriteStationObjects, favorites, user?.uid]);
+  }, [favoriteStationObjects, favorites, user?.uid]);
 
   if (mobilePairCode) {
     return (
@@ -805,6 +802,10 @@ export default function App() {
     <div className="min-h-screen bg-[#131313] text-[#e5e2e1] flex flex-col font-['Inter'] relative selection:bg-[#8B5CF6] selection:text-white">
       {/* Clean Subtle Background */}
       <ShaderBackground />
+      {/* Realistic Space Cosmos (comets, moons, planets, rockets, space stations, UFOs) */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-55">
+        <RealisticSpaceCosmos />
+      </div>
 
       {/* Top App Bar with Google Login / Logout & Live API Badge */}
       <TopAppBar
@@ -839,7 +840,7 @@ export default function App() {
               errorMessage={playbackError}
               onSelectStation={st => handleTuneToStation(st)}
               onTogglePlay={handleTogglePlay}
-              favorites={isDriveConnected ? favorites : []}
+              favorites={favorites}
               onToggleFavorite={handleToggleFavorite}
               initialStations={stations}
               onInstallPWA={handleInstallPWA}
@@ -858,8 +859,8 @@ export default function App() {
               onTogglePlay={handleTogglePlay}
               onToggleFavorite={handleToggleFavorite}
               onNavigateToDiscover={() => handleSelectTab('descubrir')}
-              isDriveConnected={isDriveConnected}
-              onConnectDrive={handleLoginWithGoogle}
+              user={user}
+              onLoginWithGoogle={handleLoginWithGoogle}
             />
           </div>
 
@@ -891,9 +892,11 @@ export default function App() {
             if (activeSource === 'drive') {
               if (drivePlaybackStatus === 'playing') {
                 driveAudioEngine.pause();
+              } else if (drivePlaybackStatus === 'paused') {
+                driveAudioEngine.resume();
               } else if (currentDriveTrack) {
                 const token = googleDriveService.getToken();
-                if (token) driveAudioEngine.playTrack(currentDriveTrack, token);
+                driveAudioEngine.playTrack(currentDriveTrack, token || undefined);
               }
             } else {
               handleTogglePlay();
@@ -921,11 +924,7 @@ export default function App() {
             driveAudioEngine.setVolume(val);
           }}
           onConnectDrive={() => {
-            if (!googleDriveService.hasToken()) {
-              handleLoginWithGoogle();
-            } else {
-              handleSelectTab('drive');
-            }
+            handleSelectTab('drive');
           }}
           onSelectDriveTrack={(track, index) => {
             setActiveSource('drive');
@@ -934,9 +933,7 @@ export default function App() {
             if (playlist && playlist.length > 0) {
               driveAudioEngine.setPlaylist(playlist, index);
             }
-            if (token) {
-              driveAudioEngine.playTrack(track, token);
-            }
+            driveAudioEngine.playTrack(track, token || undefined);
           }}
         />
       )}
@@ -954,9 +951,11 @@ export default function App() {
           if (activeSource === 'drive') {
             if (drivePlaybackStatus === 'playing') {
               driveAudioEngine.pause();
+            } else if (drivePlaybackStatus === 'paused') {
+              driveAudioEngine.resume();
             } else if (currentDriveTrack) {
               const token = googleDriveService.getToken();
-              if (token) driveAudioEngine.playTrack(currentDriveTrack, token);
+              driveAudioEngine.playTrack(currentDriveTrack, token || undefined);
             }
           } else {
             handleTogglePlay();
@@ -972,7 +971,7 @@ export default function App() {
           audioEngine.setVolume(val);
           driveAudioEngine.setVolume(val);
         }}
-        isFavorite={isDriveConnected && favoriteStationObjects.some(s => s.id === currentStation.id)}
+        isFavorite={favoriteStationObjects.some(s => s.id === currentStation.id)}
         onToggleFavorite={handleToggleFavorite}
       />
 

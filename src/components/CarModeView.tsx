@@ -52,7 +52,7 @@ const DEFAULT_CAR_TRACKS: DriveAudioFile[] = [
     id: 'track-4',
     name: 'Midnight Cruising 120km/h.mp3',
     artist: 'Aero Dynamics',
-    album: 'Tesla Nightrun',
+    album: 'Cyber Nightrun',
     duration: 198, // 03:18
   },
   {
@@ -106,12 +106,18 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
+  // Audio coexistence tip state
+  const [showCarAudioTip, setShowCarAudioTip] = useState<boolean>(false);
+
   // Drive authentication & playlist state
   const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => googleDriveService.hasToken());
   const [enginePlaylist, setEnginePlaylist] = useState<DriveAudioFile[]>(() => driveAudioEngine.getPlaylist());
 
-  // Demo playback timing state when simulating or listening without Drive token
-  const [demoCurrentTime, setDemoCurrentTime] = useState<number>(0);
+  // High-precision playback timing & duration synchronized directly with real audio engine
+  const [playbackCurrentTime, setPlaybackCurrentTime] = useState<number>(() => driveAudioEngine.getCurrentTime() || 0);
+  const [playbackDuration, setPlaybackDuration] = useState<number>(() => driveAudioEngine.getDuration() || 0);
+  const isScrubbingRef = useRef<boolean>(false);
+  const orbRef = useRef<HTMLDivElement>(null);
   const [selectedDemoIndex, setSelectedDemoIndex] = useState<number>(1); // Index 1 is Neon Supercharger as in screenshot 2!
 
   // Full unified track list: user's real Drive songs if loaded, otherwise DEFAULT_CAR_TRACKS
@@ -154,14 +160,32 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
   // Sync time counter with driveAudioEngine when playing real Drive audio
   useEffect(() => {
-    if (activeSource !== 'drive') return;
-    const unsub = driveAudioEngine.onTimeUpdate((time) => {
-      setDemoCurrentTime(time);
+    const unsub = driveAudioEngine.onTimeUpdate((time, dur) => {
+      if (activeSource === 'drive' && !isScrubbingRef.current) {
+        setPlaybackCurrentTime(time);
+        if (dur > 0) {
+          setPlaybackDuration(dur);
+        }
+      }
     });
     return unsub;
   }, [activeSource]);
 
-  // Wake lock & fullscreen handler for Tesla screen
+  // Reset & sync when currentDriveTrack or source changes
+  useEffect(() => {
+    if (activeSource === 'drive') {
+      const cur = driveAudioEngine.getCurrentTime();
+      setPlaybackCurrentTime(cur);
+      const dur = driveAudioEngine.getDuration();
+      if (dur > 0) {
+        setPlaybackDuration(dur);
+      } else if (currentDriveTrack?.duration) {
+        setPlaybackDuration(currentDriveTrack.duration);
+      }
+    }
+  }, [currentDriveTrack, activeSource]);
+
+  // Wake lock & fullscreen handler for car screen
   useEffect(() => {
     teslaBackgroundService.requestWakeLock();
     const handleFullscreenChange = () => {
@@ -184,11 +208,16 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Simulated playback timer for demo mode if not using real drive token
+  // Simulated playback timer ONLY for offline demo tracks when real Drive or Radio engine is NOT active
+  // CRITICAL: NEVER run simulation timer when real audio (Drive or Radio) is active to prevent conflicts and jumps
   useEffect(() => {
+    if (activeSource === 'drive' || activeSource === 'radio') {
+      return;
+    }
     if (!isPlaying) return;
+
     const interval = setInterval(() => {
-      setDemoCurrentTime(prev => {
+      setPlaybackCurrentTime(prev => {
         const total = activeTrack?.duration || 184;
         if (prev >= total) {
           if (isLoopActive) return 0;
@@ -199,7 +228,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPlaying, activeTrack, isLoopActive, onNext]);
+  }, [isPlaying, activeTrack, isLoopActive, onNext, activeSource]);
 
   // Format seconds to mm:ss
   const formatTime = (secs: number) => {
@@ -207,6 +236,103 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = Math.floor(secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+  };
+
+  // Compute effective duration & normalized progress ratio (0 to 1)
+  const effectiveDuration = useMemo(() => {
+    if (activeSource === 'drive') {
+      if (playbackDuration > 0) return playbackDuration;
+      if (currentDriveTrack?.duration && currentDriveTrack.duration > 0) return currentDriveTrack.duration;
+    }
+    if (activeTrack?.duration && activeTrack.duration > 0) return activeTrack.duration;
+    return 184; // 03:04 default fallback if metadata not yet resolved
+  }, [activeSource, playbackDuration, currentDriveTrack?.duration, activeTrack?.duration]);
+
+  const progressRatio = useMemo(() => {
+    if (effectiveDuration <= 0) return 0;
+    return Math.min(1, Math.max(0, playbackCurrentTime / effectiveDuration));
+  }, [playbackCurrentTime, effectiveDuration]);
+
+  // 12 precision hour markers (each 30 degrees: 12:00, 1:00, 2:00 ... 11:00)
+  const hourTicks = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => {
+      const angle = (i * 30 - 90) * (Math.PI / 180);
+      const isCardinal = i % 3 === 0; // 12, 3, 6, 9
+      const rInner = isCardinal ? 91.5 : 93.5;
+      const rOuter = 95.5;
+      return {
+        hour: i === 0 ? 12 : i,
+        x1: 100 + rInner * Math.cos(angle),
+        y1: 100 + rInner * Math.sin(angle),
+        x2: 100 + rOuter * Math.cos(angle),
+        y2: 100 + rOuter * Math.sin(angle),
+        isCardinal,
+      };
+    });
+  }, []);
+
+  // Moving leading tracer bead & lens flare at current audio progress
+  const headPos = useMemo(() => {
+    const angleDeg = progressRatio * 360;
+    const angleRad = (angleDeg - 90) * (Math.PI / 180);
+    const r = 95.5;
+    return {
+      x: 100 + r * Math.cos(angleRad),
+      y: 100 + r * Math.sin(angleRad),
+      angleDeg,
+    };
+  }, [progressRatio]);
+
+  // Circular scrubber handling along the outer sphere perimeter
+  const handleScrubAtPoint = (clientX: number, clientY: number) => {
+    if (!orbRef.current) return;
+    const rect = orbRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    let deg = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+    if (deg < 0) deg += 360;
+    const scrubRatio = Math.max(0, Math.min(1, deg / 360));
+    const targetSec = scrubRatio * effectiveDuration;
+    setPlaybackCurrentTime(targetSec);
+    if (activeSource === 'drive') {
+      driveAudioEngine.seek(targetSec);
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!orbRef.current) return;
+    const rect = orbRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const radiusPx = rect.width / 2;
+    // Engage scrubber when clicking/tapping the perimeter band (outer 25% of sphere)
+    if (dist >= radiusPx * 0.72 && dist <= radiusPx * 1.08) {
+      isScrubbingRef.current = true;
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      handleScrubAtPoint(e.clientX, e.clientY);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isScrubbingRef.current) {
+      handleScrubAtPoint(e.clientX, e.clientY);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isScrubbingRef.current) {
+      isScrubbingRef.current = false;
+      try {
+        (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+      } catch {
+        // ignore
+      }
+    }
   };
 
   // Track name cleanup for display
@@ -250,19 +376,19 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   // Play a specific track from the Biblioteca list
   const handleSelectTrack = (track: DriveAudioFile, index: number) => {
     setSelectedDemoIndex(index);
-    setDemoCurrentTime(0);
+    setPlaybackCurrentTime(0);
+    if (track.duration) {
+      setPlaybackDuration(track.duration);
+    }
 
     if (onSelectDriveTrack) {
       onSelectDriveTrack(track, index);
     } else {
       const token = googleDriveService.getToken();
-      if (token && isDriveConnected) {
-        driveAudioEngine.playTrack(track, token);
+      driveAudioEngine.playTrack(track, token || undefined);
+      if (!isPlaying) {
+        onTogglePlay();
       }
-    }
-
-    if (!isPlaying) {
-      onTogglePlay();
     }
   };
 
@@ -297,7 +423,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
             type="button"
             onClick={handleToggleFullscreen}
             className="px-2.5 sm:px-3 py-1 rounded-full bg-white/5 hover:bg-white/15 border border-white/20 text-white font-mono text-[10px] sm:text-xs uppercase tracking-wider flex items-center gap-1 cursor-pointer backdrop-blur-md transition-all"
-            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa Tesla'}
+            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa Coche'}
           >
             <span className="material-symbols-outlined text-sm sm:text-base text-cyan-400">
               {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
@@ -321,9 +447,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
       {/* MAIN SPHERICAL COCKPIT ORB (100% FAITHFUL TO SCREENSHOTS 1 & 2)           */}
       {/* ========================================================================= */}
       <div className="relative flex items-center justify-center p-2 z-20">
-        {/* Exterior Neon LED Effects: Halo, Glow, Accent Arc strips & Lens Flare */}
+        {/* Exterior Neon LED Effects: Halo, Glow, Accent Arc strips & Moving Lens Flare */}
         <div
-          className={`relative rounded-full flex items-center justify-center transition-all duration-700 ${
+          ref={orbRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className={`relative rounded-full flex items-center justify-center transition-all duration-700 select-none ${
             currentView === 'library'
               ? 'shadow-[0_0_55px_rgba(78,222,163,0.65),0_0_110px_rgba(34,197,94,0.35)]'
               : 'shadow-[0_0_60px_rgba(124,58,237,0.45),0_0_110px_rgba(99,102,241,0.25)]'
@@ -331,7 +462,9 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
           style={{
             width: 'min(92vw, 90vh, 580px)',
             height: 'min(92vw, 90vh, 580px)',
+            touchAction: 'none',
           }}
+          title="Progreso de audición sincronizado (12:00 a 00:00). Puedes pulsar o arrastrar para saltar a cualquier punto."
         >
           {/* Outer Ring 1: Diffused Colored Aura */}
           <div
@@ -351,17 +484,189 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
             }`}
           />
 
-          {/* Outer Ring 3: Segmented / Dashed Automotive Track Ring */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none rounded-full" viewBox="0 0 100 100">
+          {/* Outer Ring 3: Dynamic Audio Progression & Cockpit Chronograph SVG Ring */}
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none rounded-full overflow-visible z-20"
+            viewBox="0 0 200 200"
+          >
+            <defs>
+              {/* Cyan to Violet electric gradient for player mode */}
+              <linearGradient id="orbProgressGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00f5ff" />
+                <stop offset="35%" stopColor="#38bdf8" />
+                <stop offset="70%" stopColor="#818cf8" />
+                <stop offset="100%" stopColor="#c084fc" />
+              </linearGradient>
+
+              {/* Emerald gradient for library mode */}
+              <linearGradient id="orbProgressGradLib" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#4edea3" />
+                <stop offset="50%" stopColor="#10b981" />
+                <stop offset="100%" stopColor="#06b6d4" />
+              </linearGradient>
+
+              {/* Atmospheric neon bloom filter */}
+              <filter id="orbNeonGlow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3" result="blur1" />
+                <feGaussianBlur stdDeviation="1.5" result="blur2" />
+                <feMerge>
+                  <feMergeNode in="blur1" />
+                  <feMergeNode in="blur2" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
+              {/* Head Flare Specular Bloom */}
+              <filter id="headFlareBloom" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="2.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            {/* Inactive Track: Subtle Background Rim */}
             <circle
-              cx="50"
-              cy="50"
-              r="47.5"
+              cx="100"
+              cy="100"
+              r="95.5"
               fill="none"
-              stroke={currentView === 'library' ? 'rgba(78,222,163,0.35)' : 'rgba(56,189,248,0.35)'}
-              strokeWidth="0.8"
-              strokeDasharray="1.2 2.2"
+              stroke="rgba(255, 255, 255, 0.08)"
+              strokeWidth="2.5"
             />
+
+            {/* Automotive Chronometer Hour Ticks (Every 30° matching 12, 1, 2... 11 o'clock) */}
+            {hourTicks.map(tick => (
+              <line
+                key={`tick-${tick.hour}`}
+                x1={tick.x1}
+                y1={tick.y1}
+                x2={tick.x2}
+                y2={tick.y2}
+                stroke={
+                  tick.isCardinal
+                    ? currentView === 'library'
+                      ? 'rgba(78,222,163,0.7)'
+                      : 'rgba(56,189,248,0.7)'
+                    : 'rgba(255,255,255,0.2)'
+                }
+                strokeWidth={tick.isCardinal ? 1.5 : 0.8}
+                strokeLinecap="round"
+              />
+            ))}
+
+            {/* 12:00 / 00:00 START & FINISH APEX INDICATOR */}
+            <polygon
+              points="97,1.5 103,1.5 100,6"
+              fill={currentView === 'library' ? '#4edea3' : '#38bdf8'}
+              className="drop-shadow-[0_0_6px_#38bdf8]"
+            />
+            <text
+              x="100"
+              y="11.5"
+              textAnchor="middle"
+              fill={currentView === 'library' ? '#4edea3' : '#38bdf8'}
+              fontSize="3.8"
+              fontFamily="monospace"
+              fontWeight="bold"
+              letterSpacing="0.2"
+              opacity="0.85"
+            >
+              12:00
+            </text>
+
+            {/* ACTIVE ILLUMINATED PROGRESSION RING (STARTS AT 12:00, ROTATES -90 DEG, ADVANCES CLOCKWISE) */}
+            {activeSource === 'drive' || !isPlaying ? (
+              <g transform="rotate(-90 100 100)">
+                {/* 1. Broad Diffused Glow Aura */}
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="95.5"
+                  fill="none"
+                  stroke={currentView === 'library' ? 'url(#orbProgressGradLib)' : 'url(#orbProgressGrad)'}
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 95.5}
+                  strokeDashoffset={(2 * Math.PI * 95.5) * (1 - progressRatio)}
+                  opacity="0.5"
+                  filter="url(#orbNeonGlow)"
+                  className="transition-[stroke-dashoffset] duration-150 ease-out"
+                />
+
+                {/* 2. Intense Solid Neon Core */}
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="95.5"
+                  fill="none"
+                  stroke={currentView === 'library' ? 'url(#orbProgressGradLib)' : 'url(#orbProgressGrad)'}
+                  strokeWidth="3.2"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 95.5}
+                  strokeDashoffset={(2 * Math.PI * 95.5) * (1 - progressRatio)}
+                  filter="url(#orbNeonGlow)"
+                  className="transition-[stroke-dashoffset] duration-150 ease-out"
+                />
+
+                {/* 3. Ultra-Bright White Specular Core Filament */}
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="95.5"
+                  fill="none"
+                  stroke="#ffffff"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 95.5}
+                  strokeDashoffset={(2 * Math.PI * 95.5) * (1 - progressRatio)}
+                  opacity="0.9"
+                  className="transition-[stroke-dashoffset] duration-150 ease-out"
+                />
+              </g>
+            ) : null}
+
+            {/* LEADING HEAD TRACER: Luminescent jewel bead & flare moving with audio progression */}
+            {progressRatio > 0 && (
+              <g>
+                {/* Horizontal Flare beam wing */}
+                <line
+                  x1={headPos.x - 12}
+                  y1={headPos.y}
+                  x2={headPos.x + 12}
+                  y2={headPos.y}
+                  stroke="#ffffff"
+                  strokeWidth="1.2"
+                  opacity="0.8"
+                  filter="url(#headFlareBloom)"
+                />
+                {/* Outer radial glow halo */}
+                <circle
+                  cx={headPos.x}
+                  cy={headPos.y}
+                  r="6.5"
+                  fill={currentView === 'library' ? '#4edea3' : '#38bdf8'}
+                  opacity="0.45"
+                  className={isPlaying ? 'animate-pulse' : ''}
+                />
+                {/* Secondary bright core bead */}
+                <circle
+                  cx={headPos.x}
+                  cy={headPos.y}
+                  r="3.5"
+                  fill={currentView === 'library' ? '#a7f3d0' : '#bae6fd'}
+                  filter="url(#headFlareBloom)"
+                />
+                {/* Intense white center point */}
+                <circle
+                  cx={headPos.x}
+                  cy={headPos.y}
+                  r="1.8"
+                  fill="#ffffff"
+                />
+              </g>
+            )}
           </svg>
 
           {/* Exterior LED Accent Arc Strips (Curved neon light strips on outer perimeter) */}
@@ -392,29 +697,6 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               />
             </>
           )}
-
-          {/* Orbital Lens Flare (Brilliant light star along the perimeter) */}
-          <div
-            className={`absolute pointer-events-none z-30 transition-all duration-700 ${
-              currentView === 'library'
-                ? 'top-[42%] -right-2'
-                : 'top-[7%] right-[11%]'
-            }`}
-          >
-            <div
-              className={`w-3.5 h-3.5 rounded-full ${
-                currentView === 'library'
-                  ? 'bg-white shadow-[0_0_20px_10px_rgba(78,222,163,0.9),0_0_40px_15px_rgba(34,197,94,0.6)]'
-                  : 'bg-white shadow-[0_0_20px_10px_rgba(147,197,253,0.9),0_0_40px_15px_rgba(168,85,247,0.6)]'
-              }`}
-            />
-            {/* Lens flare horizontal beam */}
-            <div
-              className={`absolute top-1/2 -left-6 w-16 h-[1.5px] -translate-y-1/2 ${
-                currentView === 'library' ? 'bg-[#4edea3]' : 'bg-[#93c5fd]'
-              } opacity-80 blur-[0.5px]`}
-            />
-          </div>
 
           {/* Inner Spherical Container (Dark interior with 3D Globe wireframe grid) */}
           <div className="relative w-full h-full rounded-full bg-[#030712] overflow-hidden flex flex-col items-center justify-center p-4 sm:p-6 text-center">
@@ -475,8 +757,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   </span>
                 </button>
 
-                {/* 2. STATUS BADGES ROW: [ AUDIO EN ESPERA ]  [ Tiempo Local ] */}
-                <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-mono tracking-wider">
+                {/* 2. STATUS BADGES ROW: [ AUDIO EN ESPERA ]  [ Tiempo Local ]  [ Audio Coche ] */}
+                <div className="flex items-center gap-1.5 sm:gap-2.5 text-[10px] sm:text-[11px] font-mono tracking-wider flex-wrap justify-center">
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/30 text-cyan-200">
                     <span
                       className={`w-2 h-2 rounded-full ${
@@ -497,6 +779,17 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     <span className="font-bold">Tiempo Local</span>
                     {localTime && <span className="text-cyan-400 font-semibold">• {localTime}</span>}
                   </div>
+
+                  {/* Audio Coche integration advice button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCarAudioTip(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1e1503]/90 border border-amber-500/50 text-amber-200 hover:border-amber-300 hover:text-white transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.25)]"
+                    title="Consejo de audio si la radio del coche suena a la vez"
+                  >
+                    <span className="material-symbols-outlined text-xs text-amber-400">volume_up</span>
+                    <span className="font-bold">Audio Coche</span>
+                  </button>
                 </div>
 
                 {/* 3. CENTRAL TRACK TITLE & SUBTITLE */}
@@ -541,11 +834,11 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => {
+                      setPlaybackCurrentTime(0);
                       if (onPrev) {
                         onPrev();
                       } else {
                         setSelectedDemoIndex(prev => (prev - 1 + allTracks.length) % allTracks.length);
-                        setDemoCurrentTime(0);
                       }
                     }}
                     className="w-11 sm:w-13 h-14 sm:h-16 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1.5 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
@@ -576,11 +869,11 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => {
+                      setPlaybackCurrentTime(0);
                       if (onNext) {
                         onNext();
                       } else {
                         setSelectedDemoIndex(prev => (prev + 1) % allTracks.length);
-                        setDemoCurrentTime(0);
                       }
                     }}
                     className="w-11 sm:w-13 h-14 sm:h-16 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1.5 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
@@ -613,10 +906,24 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 </div>
 
                 {/* 5. MONOSPACE DIGITAL TIME COUNTER */}
-                <div className="text-cyan-300 font-mono tracking-widest text-xs sm:text-sm font-bold drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]">
-                  <span>{formatTime(demoCurrentTime)}</span>
-                  <span className="text-cyan-500 mx-1.5">/</span>
-                  <span>{formatTime(activeTrack?.duration || 184)}</span>
+                <div 
+                  className="text-cyan-300 font-mono tracking-widest text-xs sm:text-sm font-bold drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] select-none"
+                  title="Progreso de audición sincronizado con el archivo de audio"
+                >
+                  {activeSource === 'radio' ? (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span>EN DIRECTO</span>
+                      <span className="text-cyan-500 mx-1">•</span>
+                      <span className="text-cyan-300">STREAMING</span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-cyan-200">{formatTime(playbackCurrentTime)}</span>
+                      <span className="text-cyan-500 mx-1.5">/</span>
+                      <span className="text-cyan-400">{formatTime(effectiveDuration)}</span>
+                    </>
+                  )}
                 </div>
 
                 {/* 6. PRIVACY BUTTON (Exclusive: user requested omitting coffee button) */}
@@ -803,6 +1110,63 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Audio coexistence tip dialog */}
+      {showCarAudioTip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-[#121212] border-2 border-amber-400 max-w-md w-full p-5 sm:p-6 text-left shadow-[0_0_40px_rgba(245,158,11,0.3)] rounded-lg">
+            <div className="flex items-center justify-between border-b border-amber-500/30 pb-3 mb-4">
+              <div className="flex items-center gap-2 text-amber-400">
+                <span className="material-symbols-outlined text-xl">volume_up</span>
+                <h3 className="font-black text-sm uppercase tracking-wide text-white">Audio en el Coche</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCarAudioTip(false)}
+                className="text-gray-400 hover:text-white cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <div className="font-mono text-xs text-[#d1d5db] flex flex-col gap-3">
+              <p className="text-amber-300 font-bold">
+                ¿Se escucha la radio propia del coche al mismo tiempo que esta emisora?
+              </p>
+              <p className="text-[11px] leading-relaxed text-[#bbcabf]">
+                Los coches cuentan con un sintonizador físico de radio FM/DAB independiente del navegador web. Por seguridad del vehículo, los navegadores no pueden apagar el chip de radio física, por lo que el sistema mezcla ambos sonidos en los altavoces.
+              </p>
+
+              <div className="bg-black/60 border border-amber-500/40 p-3 flex flex-col gap-2 rounded">
+                <div className="text-[#4edea3] font-bold text-[11px] uppercase flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">check_circle</span>
+                  Solución rápida (1 segundo):
+                </div>
+                <ul className="list-disc list-inside space-y-1.5 text-[11px] text-[#e5e5e5]">
+                  <li>
+                    Pulsa la <strong className="text-white">rueda izquierda del volante</strong> (o botón de mute/pausa del volante) una vez para pausar la radio del coche.
+                  </li>
+                  <li>
+                    O toca el <strong className="text-white">mini-reproductor en la pantalla del coche</strong> y pulsa Pausa en la radio FM nativa.
+                  </li>
+                </ul>
+              </div>
+
+              <p className="text-[10px] text-[#86948a] leading-relaxed">
+                Una vez pausada la radio nativa, esta aplicación tomará el control total del audio de tu coche con ecualización de alta fidelidad.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCarAudioTip(false)}
+              className="mt-5 w-full py-2 bg-amber-400 text-black font-mono text-xs font-black uppercase hover:bg-amber-300 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] rounded"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

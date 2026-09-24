@@ -11,6 +11,7 @@ interface TopAppBarProps {
   user: User | null;
   onLoginWithGoogle: () => void;
   onLogout: () => void;
+  onOpenCarPairing?: () => void;
   onOpenTeslaPairing?: () => void;
   isSyncing?: boolean;
 }
@@ -22,9 +23,11 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   user,
   onLoginWithGoogle,
   onLogout,
+  onOpenCarPairing,
   onOpenTeslaPairing,
   isSyncing = false,
 }) => {
+  const triggerCarPairing = onOpenCarPairing || onOpenTeslaPairing;
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -154,16 +157,16 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                     </div>
                   </div>
 
-                  {onOpenTeslaPairing && (
+                  {triggerCarPairing && (
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
-                        onOpenTeslaPairing();
+                        triggerCarPairing();
                       }}
                       className="w-full text-left font-mono-tech text-xs text-[#bbcabf] hover:text-white p-2 bg-[#181818] border border-[#333] flex items-center gap-2 hover:bg-[#252525] cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-sm text-[#4edea3]">qr_code_scanner</span>
-                      Vincular Tesla con Móvil (QR)
+                      Vincular Coche con Móvil (QR)
                     </button>
                   )}
 
@@ -212,17 +215,17 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 </span>
               </button>
 
-              {/* 2. Tesla QR Pairing Button (Responsive) */}
-              {onOpenTeslaPairing && (
+              {/* 2. Car QR Pairing Button (Responsive) */}
+              {triggerCarPairing && (
                 <button
-                  onClick={onOpenTeslaPairing}
+                  onClick={triggerCarPairing}
                   className="neo-button bg-[#4edea3] text-black font-mono-tech text-xs font-bold px-2 sm:px-2.5 py-1.5 border-2 border-black flex items-center gap-1.5 uppercase hover:bg-[#3bc791] whitespace-nowrap cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 shrink-0"
-                  title="Vincular con tu móvil mediante código QR (ideal para Tesla)"
-                  aria-label="Vincular Tesla con QR"
+                  title="Vincular con tu móvil mediante código QR (ideal para la pantalla del coche)"
+                  aria-label="Vincular Coche con QR"
                 >
                   <span className="material-symbols-outlined text-sm shrink-0">qr_code_scanner</span>
                   <span className="hidden sm:inline">
-                    <span className="hidden xl:inline">Vincular </span>Tesla (QR)
+                    <span className="hidden xl:inline">Vincular </span>Coche (QR)
                   </span>
                 </button>
               )}
@@ -244,7 +247,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
             type="button"
             onClick={handleToggleFullscreen}
             className="w-8 h-8 sm:w-9 sm:h-9 bg-[#201f1f] hover:bg-[#353534] text-white border-2 border-black font-mono-tech text-xs font-bold uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer active:translate-y-0.5 flex items-center justify-center shrink-0"
-            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa (Tesla 1920x1200)'}
+            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa Coche (1920x1200)'}
             aria-label={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
           >
             <span className="material-symbols-outlined text-base sm:text-lg text-[#4edea3]">

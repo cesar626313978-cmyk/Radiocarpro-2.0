@@ -7,6 +7,7 @@ export interface DriveAudioFile {
   duration?: number;
   artist?: string;
   album?: string;
+  mimeType?: string;
   isCached?: boolean;
 }
 

@@ -4,21 +4,25 @@ import { googleDriveService } from './googleDriveService';
 import { teslaBackgroundService } from './teslaBackgroundService';
 
 /**
- * Advanced Cloud Drive Audio Engine for Google Drive MP3 tracks.
+ * DriveAudioEngine
+ * Dual-deck audio pipeline tailored for Google Drive music playback in Tesla and Mobile.
  * Features:
- * - Tesla Background Keep-Alive: Prevents browser tab freezing when minimized behind Maps/Tesla apps.
- * - Dual Audio Element Architecture (Audio A / Audio B) for gapless/seamless playback.
- * - Web Audio API BiquadFilter 3-band EQ (Lowshelf 100Hz, Peaking 1kHz, Highshelf 8kHz) + Master Gain.
- * - Strict RAM Ceiling: Max 2 active Object URLs, revoking unused Blob URLs deterministically.
- * - Vehicle Multi-Track Forward Buffering (4 tracks cached ahead into IndexedDB).
- * - IndexedDB Cache integration with offline fallback badge.
- * - Media Session API synchronization and position state reporting for Tesla steering wheel controls.
+ * - Dual HTMLAudioElement slots ('A' and 'B') for gapless switching & crossfade
+ * - Safe per-slot Blob URL lifecycle (no premature revocation)
+ * - 3-band Web Audio Equalizer (Bass, Mid, Treble) & Analyzer
+ * - Configurable crossfade (0s, 3s, 5s, 8s, 12s)
+ * - Vehicle Multi-Track Forward Buffering Engine (cellular drop-out protection)
+ * - Synth fallback for demo cyber tracks so playback never errors on mock IDs
  */
-class DriveAudioEngine {
+export class DriveAudioEngine {
   private audioElementA: HTMLAudioElement;
   private audioElementB: HTMLAudioElement;
   private activeSlot: 'A' | 'B' = 'A';
 
+  private slotABlobUrl: string | null = null;
+  private slotBBlobUrl: string | null = null;
+
+  // Web Audio Context & Nodes for EQ & Volume
   private audioContext: AudioContext | null = null;
   private masterGainNode: GainNode | null = null;
   private lowFilterNode: BiquadFilterNode | null = null;
@@ -35,10 +39,14 @@ class DriveAudioEngine {
   private volume = 0.8;
   private currentTime = 0;
   private duration = 0;
-  private isPreloadingNext = false;
   private hasPreloadedNext = false;
+  private hasAttemptedRecovery = false;
 
-  private activeBlobUrls: string[] = [];
+  // Crossfade settings
+  private crossfadeSeconds = 0; // 0 (OFF), 3, 5, 8, 12
+  private isCrossfading = false;
+  private crossfadeIntervalId: any = null;
+
   private statusListeners: Array<(status: DrivePlaybackStatus) => void> = [];
   private timeListeners: Array<(time: number, duration: number) => void> = [];
   private trackListeners: Array<(track: DriveAudioFile | null) => void> = [];
@@ -51,8 +59,9 @@ class DriveAudioEngine {
   constructor() {
     this.audioElementA = new Audio();
     this.audioElementB = new Audio();
-    this.audioElementA.crossOrigin = 'anonymous';
-    this.audioElementB.crossOrigin = 'anonymous';
+
+    // Do NOT set crossOrigin = 'anonymous' for blob: URLs.
+    // Blob URLs are same-origin by default; setting crossOrigin triggers CORS failures in Chromium/Safari.
     this.audioElementA.preload = 'auto';
     this.audioElementB.preload = 'auto';
 
@@ -67,8 +76,21 @@ class DriveAudioEngine {
     this.setupElementListeners(this.audioElementA, 'A');
     this.setupElementListeners(this.audioElementB, 'B');
 
-    // Auto-resume background buffer when car re-enters cellular coverage
+    // Restore saved crossfade preference
     if (typeof window !== 'undefined') {
+      try {
+        const savedCf = localStorage.getItem('myradiopro_drive_crossfade');
+        if (savedCf) {
+          const parsed = parseInt(savedCf, 10);
+          if ([0, 3, 5, 8, 12].includes(parsed)) {
+            this.crossfadeSeconds = parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      // Auto-resume background buffer when car re-enters cellular coverage
       window.addEventListener('online', () => {
         console.log('[DriveAudioEngine] Red online detectada. Reanudando búfer de canciones de Drive...');
         this.triggerForwardBuffer();
@@ -96,36 +118,54 @@ class DriveAudioEngine {
     return this.activeSlot === 'A' ? this.audioElementB : this.audioElementA;
   }
 
+  private assignBlobUrl(slot: 'A' | 'B', newUrl: string) {
+    if (slot === 'A') {
+      if (this.slotABlobUrl && this.slotABlobUrl !== newUrl && this.slotABlobUrl !== this.slotBBlobUrl) {
+        try {
+          URL.revokeObjectURL(this.slotABlobUrl);
+        } catch {}
+      }
+      this.slotABlobUrl = newUrl;
+    } else {
+      if (this.slotBBlobUrl && this.slotBBlobUrl !== newUrl && this.slotBBlobUrl !== this.slotABlobUrl) {
+        try {
+          URL.revokeObjectURL(this.slotBBlobUrl);
+        } catch {}
+      }
+      this.slotBBlobUrl = newUrl;
+    }
+  }
+
   private initAudioContextIfNeeded() {
     if (!this.audioContext) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
-        this.audioContext = new AudioCtx();
-        this.masterGainNode = this.audioContext.createGain();
-        this.masterGainNode.gain.value = this.volume;
-
-        // 3-band Equalizer filters
-        this.lowFilterNode = this.audioContext.createBiquadFilter();
-        this.lowFilterNode.type = 'lowshelf';
-        this.lowFilterNode.frequency.value = 100;
-        this.lowFilterNode.gain.value = 0;
-
-        this.midFilterNode = this.audioContext.createBiquadFilter();
-        this.midFilterNode.type = 'peaking';
-        this.midFilterNode.frequency.value = 1000;
-        this.midFilterNode.gain.value = 0;
-        this.midFilterNode.Q.value = 1;
-
-        this.highFilterNode = this.audioContext.createBiquadFilter();
-        this.highFilterNode.type = 'highshelf';
-        this.highFilterNode.frequency.value = 8000;
-        this.highFilterNode.gain.value = 0;
-
-        this.analyserNode = this.audioContext.createAnalyser();
-        this.analyserNode.fftSize = 64;
-
-        // Connect chain: Element -> Low -> Mid -> High -> MasterGain -> Analyser -> Destination
         try {
+          this.audioContext = new AudioCtx();
+          this.masterGainNode = this.audioContext.createGain();
+          this.masterGainNode.gain.value = this.volume;
+
+          // 3-band Equalizer filters
+          this.lowFilterNode = this.audioContext.createBiquadFilter();
+          this.lowFilterNode.type = 'lowshelf';
+          this.lowFilterNode.frequency.value = 100;
+          this.lowFilterNode.gain.value = 0;
+
+          this.midFilterNode = this.audioContext.createBiquadFilter();
+          this.midFilterNode.type = 'peaking';
+          this.midFilterNode.frequency.value = 1000;
+          this.midFilterNode.gain.value = 0;
+          this.midFilterNode.Q.value = 1;
+
+          this.highFilterNode = this.audioContext.createBiquadFilter();
+          this.highFilterNode.type = 'highshelf';
+          this.highFilterNode.frequency.value = 8000;
+          this.highFilterNode.gain.value = 0;
+
+          this.analyserNode = this.audioContext.createAnalyser();
+          this.analyserNode.fftSize = 64;
+
+          // Connect chain
           const sourceA = this.audioContext.createMediaElementSource(this.audioElementA);
           const sourceB = this.audioContext.createMediaElementSource(this.audioElementB);
 
@@ -138,7 +178,7 @@ class DriveAudioEngine {
           this.masterGainNode.connect(this.analyserNode);
           this.analyserNode.connect(this.audioContext.destination);
         } catch {
-          // Already connected or cross-origin node exception
+          // Web Audio not available or media element source already attached
         }
       }
     }
@@ -148,11 +188,51 @@ class DriveAudioEngine {
   }
 
   private setupElementListeners(audioEl: HTMLAudioElement, slot: 'A' | 'B') {
+    audioEl.onloadedmetadata = () => {
+      if (this.activeSlot === slot) {
+        if (!isNaN(audioEl.duration) && audioEl.duration > 0) {
+          this.duration = audioEl.duration;
+          if (this.currentTrack && !this.currentTrack.duration) {
+            this.currentTrack.duration = Math.round(audioEl.duration);
+          }
+          this.timeListeners.forEach(l => l(this.currentTime, this.duration));
+        }
+      }
+    };
+
+    audioEl.ondurationchange = () => {
+      if (this.activeSlot === slot) {
+        if (!isNaN(audioEl.duration) && audioEl.duration > 0) {
+          this.duration = audioEl.duration;
+          if (this.currentTrack && !this.currentTrack.duration) {
+            this.currentTrack.duration = Math.round(audioEl.duration);
+          }
+          this.timeListeners.forEach(l => l(this.currentTime, this.duration));
+        }
+      }
+    };
+
     audioEl.ontimeupdate = () => {
       if (this.activeSlot === slot) {
         this.currentTime = audioEl.currentTime;
-        this.duration = audioEl.duration || 0;
+        if (!isNaN(audioEl.duration) && audioEl.duration > 0) {
+          this.duration = audioEl.duration;
+        }
         this.timeListeners.forEach(l => l(this.currentTime, this.duration));
+
+        // Check if crossfade should trigger before track ends
+        if (
+          this.crossfadeSeconds > 0 &&
+          !this.isCrossfading &&
+          this.playlist.length > 1 &&
+          !isNaN(audioEl.duration) &&
+          audioEl.duration > this.crossfadeSeconds + 2
+        ) {
+          const timeLeft = audioEl.duration - audioEl.currentTime;
+          if (timeLeft <= this.crossfadeSeconds && timeLeft > 0.4) {
+            this.startCrossfade(timeLeft);
+          }
+        }
 
         // Check lazy buffering & pre-priming next track
         this.checkLazyBufferAndPreprime();
@@ -179,20 +259,56 @@ class DriveAudioEngine {
     };
 
     audioEl.onpause = () => {
-      if (this.activeSlot === slot && this.status === 'playing') {
+      if (this.activeSlot === slot && this.status === 'playing' && !this.isCrossfading) {
         this.setStatus('paused');
       }
     };
 
     audioEl.onended = () => {
       if (this.activeSlot === slot) {
-        this.playNext();
+        if (!this.isCrossfading) {
+          this.playNext();
+        }
       }
     };
 
     audioEl.onerror = () => {
+      const err = audioEl.error;
+      // Code 1 is MEDIA_ERR_ABORTED - normal during source resets or track switches.
+      if (err && err.code === 1) {
+        return;
+      }
+
+      // If audioEl has no valid src or was cleared, ignore
+      if (!audioEl.src || audioEl.src === window.location.href || audioEl.src.endsWith('/')) {
+        return;
+      }
+
       if (this.activeSlot === slot) {
-        console.error('Drive Audio Element Error:', audioEl.error);
+        const codeNames = ['NONE', 'MEDIA_ERR_ABORTED', 'MEDIA_ERR_NETWORK', 'MEDIA_ERR_DECODE', 'MEDIA_ERR_SRC_NOT_SUPPORTED'];
+        console.warn('Drive Audio Element warning/error details:', {
+          slot,
+          code: err?.code,
+          codeName: err ? codeNames[err.code] || 'UNKNOWN' : 'NONE',
+          message: err?.message,
+          src: audioEl.src ? audioEl.src.substring(0, 80) : '',
+          readyState: audioEl.readyState,
+          networkState: audioEl.networkState,
+        });
+
+        // 1-time transparent recovery attempt if track had a transient error
+        if (this.currentTrack && !this.hasAttemptedRecovery) {
+          this.hasAttemptedRecovery = true;
+          console.log('[DriveAudioEngine] Reintentando carga de la pista tras incidencia de red...');
+          setTimeout(() => {
+            if (this.currentTrack) {
+              const token = googleDriveService.getToken();
+              this.playTrack(this.currentTrack, token || undefined);
+            }
+          }, 400);
+          return;
+        }
+
         this.setStatus('error');
       }
     };
@@ -206,7 +322,6 @@ class DriveAudioEngine {
       if (newStatus === 'playing') {
         navigator.mediaSession.playbackState = 'playing';
       } else if (newStatus === 'buffering') {
-        // Keep as playing in MediaSession so Tesla doesn't think audio stopped and kill the tab
         navigator.mediaSession.playbackState = 'playing';
       } else if (newStatus === 'paused') {
         navigator.mediaSession.playbackState = 'paused';
@@ -255,9 +370,126 @@ class DriveAudioEngine {
     this.refreshCacheFlagsForPlaylist();
   }
 
+  public setCrossfadeSeconds(seconds: number) {
+    this.crossfadeSeconds = Math.max(0, Math.min(12, seconds));
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('myradiopro_drive_crossfade', String(this.crossfadeSeconds));
+      } catch {}
+    }
+  }
+
+  public getCrossfadeSeconds(): number {
+    return this.crossfadeSeconds;
+  }
+
+  private cancelCrossfade() {
+    if (this.crossfadeIntervalId) {
+      clearInterval(this.crossfadeIntervalId);
+      this.crossfadeIntervalId = null;
+    }
+    this.isCrossfading = false;
+  }
+
+  /**
+   * Smooth equal-power crossfade between the active slot and inactive slot.
+   */
+  private async startCrossfade(durationSeconds: number) {
+    if (this.isCrossfading || this.playlist.length <= 1) return;
+    this.isCrossfading = true;
+
+    const nextIdx = (this.currentIndex + 1) % this.playlist.length;
+    const nextItem = this.playlist[nextIdx];
+    if (!nextItem) {
+      this.isCrossfading = false;
+      return;
+    }
+
+    const currentEl = this.getActiveElement();
+    const nextEl = this.getInactiveElement();
+    const nextSlot = this.activeSlot === 'A' ? 'B' : 'A';
+
+    // Ensure next element is loaded
+    if (!this.hasPreloadedNext || this.nextTrack?.id !== nextItem.id) {
+      try {
+        let blob = await driveCacheService.getBlob(nextItem.id);
+        if (!blob) {
+          if (nextItem.id.startsWith('track-')) {
+            blob = this.generateSynthWaveBlob(nextItem.id);
+          } else {
+            const token = googleDriveService.getToken();
+            if (token) {
+              blob = await googleDriveService.fetchAudioBlob(token, nextItem.id, undefined, nextItem.mimeType);
+              driveCacheService.saveBlob(nextItem.id, blob).catch(() => {});
+            }
+          }
+        }
+        if (blob) {
+          const blobUrl = URL.createObjectURL(blob);
+          this.assignBlobUrl(nextSlot, blobUrl);
+          nextEl.src = blobUrl;
+          nextEl.preload = 'auto';
+          nextEl.load();
+          this.hasPreloadedNext = true;
+          this.nextTrack = nextItem;
+        }
+      } catch (err) {
+        console.warn('[DriveAudioEngine] Error cargando pista para crossfade:', err);
+        this.isCrossfading = false;
+        return;
+      }
+    }
+
+    // Start next track at volume 0
+    nextEl.volume = 0;
+    try {
+      await nextEl.play();
+    } catch {
+      this.isCrossfading = false;
+      return;
+    }
+
+    const crossfadeDurationMs = Math.max(1000, durationSeconds * 1000);
+    const startTime = Date.now();
+    const targetVolume = this.volume;
+
+    this.crossfadeIntervalId = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1, elapsed / crossfadeDurationMs);
+
+      // Equal-power curve for constant acoustic volume
+      const fadeOut = Math.cos(progress * 0.5 * Math.PI);
+      const fadeIn = Math.sin(progress * 0.5 * Math.PI);
+
+      currentEl.volume = Math.max(0, targetVolume * fadeOut);
+      nextEl.volume = Math.min(targetVolume, targetVolume * fadeIn);
+
+      if (progress >= 1) {
+        this.cancelCrossfade();
+        currentEl.pause();
+        currentEl.currentTime = 0;
+        currentEl.volume = 0;
+
+        // Finalize transition
+        this.activeSlot = nextSlot;
+        nextEl.volume = targetVolume;
+        this.currentIndex = nextIdx;
+        this.currentTrack = nextItem;
+        this.hasPreloadedNext = false;
+        this.nextTrack = null;
+        this.duration = (!isNaN(nextEl.duration) && nextEl.duration > 0) ? nextEl.duration : (nextItem.duration || 0);
+        this.trackListeners.forEach(l => l(nextItem));
+        this.updateMediaSessionMetadata(nextItem);
+        this.setStatus('playing');
+
+        // Replenish buffer for upcoming songs
+        this.triggerForwardBuffer();
+      }
+    }, 40);
+  }
+
   /**
    * Fast background audit of tracks in the playlist against IndexedDB cache.
-   * Updates `isCached` on items so the UI immediately shows the green 'OFF' badge.
    */
   public async refreshCacheFlagsForPlaylist() {
     let changed = false;
@@ -274,11 +506,14 @@ class DriveAudioEngine {
   }
 
   public async playTrack(track: DriveAudioFile, token?: string) {
+    this.cancelCrossfade();
     this.initAudioContextIfNeeded();
     this.currentTrack = track;
     this.hasPreloadedNext = false;
-    this.isPreloadingNext = false;
+    this.currentTime = 0;
+    this.duration = track.duration || 0;
     this.trackListeners.forEach(l => l(track));
+    this.timeListeners.forEach(l => l(0, this.duration));
     this.setStatus('buffering');
 
     const authToken = token || googleDriveService.getToken() || '';
@@ -290,21 +525,26 @@ class DriveAudioEngine {
 
       if (!blob) {
         isCached = false;
-        if (!authToken) {
-          throw new Error('Pista no disponible sin conexión');
+        if (track.id.startsWith('track-')) {
+          // Generate synth audio for cyber demo tracks
+          blob = this.generateSynthWaveBlob(track.id);
+          driveCacheService.saveBlob(track.id, blob).catch(() => {});
+        } else {
+          if (!authToken) {
+            throw new Error('Pista no disponible sin conexión');
+          }
+          // 2. Fetch from Google Drive API with accurate MIME detection
+          blob = await googleDriveService.fetchAudioBlob(authToken, track.id, undefined, track.mimeType);
+          driveCacheService.saveBlob(track.id, blob).catch(() => {});
         }
-        // 2. Fetch from Google Drive API
-        blob = await googleDriveService.fetchAudioBlob(authToken, track.id);
-        // Save to IndexedDB cache in background
-        driveCacheService.saveBlob(track.id, blob).catch(() => {});
       }
 
       // Mark cached status in playlist
       track.isCached = isCached;
 
-      // 3. Create Blob URL with RAM ceiling enforcement (Max 2 active Blob URLs)
+      // 3. Assign Blob URL with safe per-slot registry
       const blobUrl = URL.createObjectURL(blob);
-      this.registerBlobUrl(blobUrl);
+      this.assignBlobUrl(this.activeSlot, blobUrl);
 
       const activeEl = this.getActiveElement();
       activeEl.pause();
@@ -314,6 +554,7 @@ class DriveAudioEngine {
 
       await activeEl.play();
       this.setStatus('playing');
+      this.hasAttemptedRecovery = false;
       this.updateMediaSessionMetadata(track);
 
       // Determine next track index
@@ -330,31 +571,13 @@ class DriveAudioEngine {
     }
   }
 
-  private registerBlobUrl(url: string) {
-    this.activeBlobUrls.push(url);
-    // Strict RAM ceiling: keep at most 2 active Blob URLs
-    if (this.activeBlobUrls.length > 2) {
-      const oldUrl = this.activeBlobUrls.shift();
-      if (oldUrl) {
-        try {
-          URL.revokeObjectURL(oldUrl);
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }
-
   /**
    * Vehicle Multi-Track Forward Buffering Engine.
-   * In a moving car, cellular coverage drops inside tunnels and dead zones.
-   * This method downloads the next 4 tracks sequentially into IndexedDB on disk,
-   * guaranteeing continuous music playback even through long network outages.
+   * Downloads upcoming tracks into IndexedDB on disk, guaranteeing continuous music through tunnels.
    */
   public async triggerForwardBuffer() {
     if (this.isForwardBuffering || this.playlist.length <= 1) return;
     const token = googleDriveService.getToken();
-    if (!token) return;
 
     this.isForwardBuffering = true;
     try {
@@ -368,14 +591,18 @@ class DriveAudioEngine {
         const alreadyCached = await driveCacheService.isCached(trackToBuffer.id);
         if (!alreadyCached) {
           try {
-            // Buffer track into IndexedDB on disk
-            const blob = await googleDriveService.fetchAudioBlob(token, trackToBuffer.id);
+            let blob: Blob;
+            if (trackToBuffer.id.startsWith('track-')) {
+              blob = this.generateSynthWaveBlob(trackToBuffer.id);
+            } else {
+              if (!token) break;
+              blob = await googleDriveService.fetchAudioBlob(token, trackToBuffer.id, undefined, trackToBuffer.mimeType);
+            }
             await driveCacheService.saveBlob(trackToBuffer.id, blob);
             trackToBuffer.isCached = true;
             this.playlistListeners.forEach(l => l([...this.playlist]));
           } catch (fetchErr) {
-            console.warn(`[DriveAudioEngine] Buffer error for track ${trackToBuffer.name}:`, fetchErr);
-            // In a tunnel/dead zone, stop forward loop gracefully and await online event
+            console.warn(`[DriveAudioEngine] Buffer notice for track ${trackToBuffer.name}:`, fetchErr);
             break;
           }
         } else if (!trackToBuffer.isCached) {
@@ -386,10 +613,15 @@ class DriveAudioEngine {
         // For the immediate next track (offset 1), also pre-prime the inactive audio element
         if (offset === 1 && !this.hasPreloadedNext) {
           try {
-            const nextBlob = await driveCacheService.getBlob(trackToBuffer.id);
+            let nextBlob = await driveCacheService.getBlob(trackToBuffer.id);
+            if (!nextBlob && trackToBuffer.id.startsWith('track-')) {
+              nextBlob = this.generateSynthWaveBlob(trackToBuffer.id);
+              await driveCacheService.saveBlob(trackToBuffer.id, nextBlob);
+            }
             if (nextBlob) {
               const blobUrl = URL.createObjectURL(nextBlob);
-              this.registerBlobUrl(blobUrl);
+              const inactiveSlot = this.activeSlot === 'A' ? 'B' : 'A';
+              this.assignBlobUrl(inactiveSlot, blobUrl);
               const inactiveEl = this.getInactiveElement();
               inactiveEl.src = blobUrl;
               inactiveEl.preload = 'auto';
@@ -414,25 +646,28 @@ class DriveAudioEngine {
   }
 
   public async playNext() {
+    this.cancelCrossfade();
     if (this.playlist.length === 0) return;
     this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
     const nextItem = this.playlist[this.currentIndex];
     const token = googleDriveService.getToken();
 
-    // If inactive element was pre-primed with next track, switch active slot instantly for gapless transition
+    // If inactive element was pre-primed with next track, switch active slot instantly
     if (this.hasPreloadedNext && this.nextTrack?.id === nextItem.id) {
       const oldActive = this.getActiveElement();
       oldActive.pause();
       this.activeSlot = this.activeSlot === 'A' ? 'B' : 'A';
       const newActive = this.getActiveElement();
       newActive.volume = this.volume;
+      this.currentTime = 0;
+      this.duration = (!isNaN(newActive.duration) && newActive.duration > 0) ? newActive.duration : (nextItem.duration || 0);
+      this.timeListeners.forEach(l => l(0, this.duration));
       await newActive.play();
       this.currentTrack = nextItem;
       this.hasPreloadedNext = false;
       this.trackListeners.forEach(l => l(nextItem));
       this.setStatus('playing');
       this.updateMediaSessionMetadata(nextItem);
-      // Replenish the forward buffer for upcoming songs
       this.triggerForwardBuffer();
     } else {
       await this.playTrack(nextItem, token || undefined);
@@ -440,6 +675,7 @@ class DriveAudioEngine {
   }
 
   public async playPrev() {
+    this.cancelCrossfade();
     if (this.playlist.length === 0) return;
     this.currentIndex = (this.currentIndex - 1 + this.playlist.length) % this.playlist.length;
     const prevItem = this.playlist[this.currentIndex];
@@ -448,38 +684,74 @@ class DriveAudioEngine {
   }
 
   public pause() {
+    this.cancelCrossfade();
     const activeEl = this.getActiveElement();
     activeEl.pause();
     this.setStatus('paused');
   }
 
   public resume() {
+    this.initAudioContextIfNeeded();
     const activeEl = this.getActiveElement();
+    activeEl.volume = this.volume;
     if (activeEl.src) {
-      activeEl.play().then(() => this.setStatus('playing')).catch(() => {});
+      activeEl.play().then(() => {
+        this.setStatus('playing');
+      }).catch(err => {
+        console.warn('Error resuming drive playback:', err);
+      });
+    } else if (this.currentTrack) {
+      const token = googleDriveService.getToken();
+      this.playTrack(this.currentTrack, token || undefined);
     }
   }
 
   public stop() {
+    this.cancelCrossfade();
     this.audioElementA.pause();
-    this.audioElementA.src = '';
     this.audioElementB.pause();
+    this.audioElementA.src = '';
     this.audioElementB.src = '';
+    if (this.slotABlobUrl) {
+      try { URL.revokeObjectURL(this.slotABlobUrl); } catch {}
+      this.slotABlobUrl = null;
+    }
+    if (this.slotBBlobUrl) {
+      try { URL.revokeObjectURL(this.slotBBlobUrl); } catch {}
+      this.slotBBlobUrl = null;
+    }
     this.currentTrack = null;
     this.setStatus('idle');
   }
 
   public seek(seconds: number) {
+    this.cancelCrossfade();
     const activeEl = this.getActiveElement();
     if (!isNaN(activeEl.duration) && activeEl.duration > 0) {
-      activeEl.currentTime = Math.max(0, Math.min(seconds, activeEl.duration));
+      const target = Math.max(0, Math.min(seconds, activeEl.duration));
+      activeEl.currentTime = target;
+      activeEl.volume = this.volume;
+      this.currentTime = target;
+      this.timeListeners.forEach(l => l(this.currentTime, this.duration));
     }
+  }
+
+  public getCurrentTime(): number {
+    const activeEl = this.getActiveElement();
+    return activeEl && !isNaN(activeEl.currentTime) ? activeEl.currentTime : this.currentTime;
+  }
+
+  public getDuration(): number {
+    const activeEl = this.getActiveElement();
+    return activeEl && !isNaN(activeEl.duration) && activeEl.duration > 0 ? activeEl.duration : this.duration;
   }
 
   public setVolume(vol: number) {
     this.volume = Math.max(0, Math.min(1, vol));
-    this.audioElementA.volume = this.volume;
-    this.audioElementB.volume = this.volume;
+    if (!this.isCrossfading) {
+      this.audioElementA.volume = this.volume;
+      this.audioElementB.volume = this.volume;
+    }
     if (this.masterGainNode && this.audioContext) {
       this.masterGainNode.gain.setValueAtTime(this.volume, this.audioContext.currentTime);
     }
@@ -544,6 +816,83 @@ class DriveAudioEngine {
     return () => {
       this.playlistListeners = this.playlistListeners.filter(cb => cb !== callback);
     };
+  }
+
+  /**
+   * Generates a 14-second punchy Cyber Synthwave demo audio loop
+   * so demo tracks in CarMode play without network requests or 404s.
+   */
+  private generateSynthWaveBlob(trackId: string): Blob {
+    const sampleRate = 44100;
+    const duration = 14;
+    const numSamples = sampleRate * duration;
+    const buffer = new ArrayBuffer(44 + numSamples * 4);
+    const view = new DataView(buffer);
+
+    // RIFF header
+    this.writeAscii(view, 0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 4, true);
+    this.writeAscii(view, 8, 'WAVE');
+    this.writeAscii(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 2, true); // Stereo
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 4, true);
+    view.setUint16(32, 4, true);
+    view.setUint16(34, 16, true);
+    this.writeAscii(view, 36, 'data');
+    view.setUint32(40, numSamples * 4, true);
+
+    const baseFreqs = [110, 130.81, 146.83, 164.81, 196, 220];
+    const trackNum = parseInt(trackId.replace(/\D/g, '') || '1', 10);
+    const root = baseFreqs[(trackNum - 1) % baseFreqs.length];
+
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+
+      // Bassline
+      const bass = Math.sin(2 * Math.PI * root * t) * 0.35 + Math.sin(2 * Math.PI * root * 2 * t) * 0.12;
+
+      // Arpeggio
+      const step = Math.floor(t * 4) % 8;
+      const arpIntervals = [0, 7, 12, 15, 19, 15, 12, 7];
+      const arpFreq = root * 2 * Math.pow(2, arpIntervals[step] / 12);
+      const arpEnv = Math.exp(-((t * 4) % 1) * 3);
+      const arp = Math.sin(2 * Math.PI * arpFreq * t) * 0.22 * arpEnv;
+
+      // Kick drum pulse (120 bpm = every 0.5s)
+      const beatTime = t % 0.5;
+      const kickFreq = Math.max(45, 120 * Math.exp(-beatTime * 30));
+      const kick = Math.sin(2 * Math.PI * kickFreq * beatTime) * Math.exp(-beatTime * 8) * 0.45;
+
+      // Synth pad
+      const pad = (Math.sin(2 * Math.PI * root * 1.5 * t) + Math.sin(2 * Math.PI * root * 2.01 * t)) * 0.08;
+
+      // Hi-hat
+      const hatTime = t % 0.25;
+      const hat = (Math.random() * 2 - 1) * Math.exp(-hatTime * 40) * 0.06;
+
+      let left = bass + arp * 0.8 + kick + pad + hat;
+      let right = bass + arp * 1.2 + kick + pad + hat * 0.8;
+
+      left = Math.max(-1, Math.min(1, left));
+      right = Math.max(-1, Math.min(1, right));
+
+      view.setInt16(offset, left < 0 ? left * 0x8000 : left * 0x7FFF, true);
+      offset += 2;
+      view.setInt16(offset, right < 0 ? right * 0x8000 : right * 0x7FFF, true);
+      offset += 2;
+    }
+
+    return new Blob([view], { type: 'audio/wav' });
+  }
+
+  private writeAscii(view: DataView, offset: number, str: string) {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
   }
 }
 

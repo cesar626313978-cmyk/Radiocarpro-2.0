@@ -82,7 +82,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                 <span>3. Sincronización en la Nube (Firebase Firestore)</span>
               </div>
               <p className="text-gray-300 text-xs">
-                Si inicias sesión con tu cuenta de Google o vinculas tu vehículo mediante código PIN de Tesla, almacenamos de forma cifrada en la base de datos Firestore únicamente:
+                Si inicias sesión con tu cuenta de Google o vinculas tu vehículo mediante código QR del coche, almacenamos de forma cifrada en la base de datos Firestore únicamente:
               </p>
               <ul className="list-disc pl-5 space-y-1 text-[11px] sm:text-xs text-gray-400">
                 <li>Tu identificador único de usuario y correo electrónico de cuenta.</li>
@@ -95,7 +95,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
             <div className="bg-black/30 border border-cyan-500/20 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm uppercase tracking-wide">
                 <span className="material-symbols-outlined text-base">directions_car</span>
-                <span>4. Reproducción Segura en Tesla y Segundo Plano</span>
+                <span>4. Reproducción Segura en el Coche y Segundo Plano</span>
               </div>
               <p className="text-gray-300 text-xs">
                 La aplicación implementa las tecnologías estándar <strong className="text-white font-semibold">MediaSession API</strong> y <strong className="text-white font-semibold">Screen WakeLock</strong> para permitir el control de avance/retroceso desde los mandos del volante del vehículo y mantener la reproducción activa cuando la pantalla conmuta al navegador GPS.

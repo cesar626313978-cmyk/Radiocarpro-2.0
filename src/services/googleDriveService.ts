@@ -190,10 +190,9 @@ export class GoogleDriveService {
                 return;
               }
               if (response.access_token) {
-                this.accessToken = response.access_token;
                 // Tokens usually expire in 3600s, set safety buffer (e.g., 50 mins)
                 const expiresIn = response.expires_in ? Number(response.expires_in) * 1000 : 3600 * 1000;
-                this.tokenExpiryTime = Date.now() + expiresIn - 300 * 1000;
+                this.setAccessToken(response.access_token, expiresIn);
                 resolve(this.accessToken!);
               } else {
                 reject(new Error('No se recibió token de acceso de Google Drive.'));
@@ -220,6 +219,11 @@ export class GoogleDriveService {
   private async fetchWithBackoff(url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> {
     try {
       const response = await fetch(url, options);
+      if (response.status === 401) {
+        console.warn('[GoogleDriveService] Access token expired or invalid (HTTP 401). Clearing token.');
+        this.clearAccessToken();
+        return response;
+      }
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
         if (retries > 0) {
           const jitter = Math.random() * 300;
@@ -238,6 +242,29 @@ export class GoogleDriveService {
         return this.fetchWithBackoff(url, options, retries - 1, nextDelay);
       }
       throw err;
+    }
+  }
+
+  public inferMimeTypeFromName(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'm4a':
+      case 'aac':
+        return 'audio/mp4';
+      case 'wav':
+        return 'audio/wav';
+      case 'flac':
+        return 'audio/flac';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'opus':
+        return 'audio/opus';
+      case 'webm':
+        return 'audio/webm';
+      default:
+        return 'audio/mpeg';
     }
   }
 
@@ -357,6 +384,10 @@ export class GoogleDriveService {
             name = parts.slice(1).join(' - ').trim();
           }
 
+          const detectedMime = (file.mimeType && file.mimeType.startsWith('audio/'))
+            ? file.mimeType
+            : this.inferMimeTypeFromName(file.name || '');
+
           allFiles.push({
             id: file.id,
             name,
@@ -365,6 +396,7 @@ export class GoogleDriveService {
             thumbnailLink: file.thumbnailLink,
             artist,
             album,
+            mimeType: detectedMime,
             isCached: false,
           });
         }
@@ -447,6 +479,10 @@ export class GoogleDriveService {
           name = parts.slice(1).join(' - ').trim();
         }
 
+        const detectedMime = (file.mimeType && file.mimeType.startsWith('audio/'))
+          ? file.mimeType
+          : this.inferMimeTypeFromName(file.name || '');
+
         files.push({
           id: file.id,
           name,
@@ -455,6 +491,7 @@ export class GoogleDriveService {
           thumbnailLink: file.thumbnailLink,
           artist,
           album,
+          mimeType: detectedMime,
           isCached: false,
         });
       }
@@ -486,10 +523,17 @@ export class GoogleDriveService {
 
   /**
    * Fetches binary audio stream from Google Drive for a file ID.
+   * Handles virus scan prompts (large files), preserves accurate audio MIME type,
+   * and reports download progress.
    */
-  public async fetchAudioBlob(token: string, fileId: string, onProgress?: (percent: number) => void): Promise<Blob> {
-    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-    const res = await this.fetchWithBackoff(url, {
+  public async fetchAudioBlob(
+    token: string,
+    fileId: string,
+    onProgress?: (percent: number) => void,
+    expectedMimeType?: string
+  ): Promise<Blob> {
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&acknowledgeAbuse=true`;
+    let res = await this.fetchWithBackoff(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -497,11 +541,44 @@ export class GoogleDriveService {
       throw new Error(`No se pudo descargar el archivo de audio (HTTP ${res.status})`);
     }
 
+    const headerContentType = res.headers.get('content-type') || '';
+
+    // Handle Google Drive virus warning HTML on files > 100MB
+    if (headerContentType.includes('text/html')) {
+      const htmlText = await res.text();
+      const confirmMatch = htmlText.match(/confirm=([0-9A-Za-z_-]+)/);
+      if (confirmMatch && confirmMatch[1]) {
+        const retryUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&confirm=${confirmMatch[1]}&acknowledgeAbuse=true`;
+        res = await this.fetchWithBackoff(retryUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          throw new Error(`Fallo tras confirmación de descarga de archivo grande (HTTP ${res.status})`);
+        }
+      } else {
+        throw new Error('Google Drive no devolvió un flujo de audio válido.');
+      }
+    }
+
+    let finalMimeType = expectedMimeType;
+    if (!finalMimeType || finalMimeType === 'application/octet-stream') {
+      const respType = res.headers.get('content-type') || '';
+      if (respType.startsWith('audio/')) {
+        finalMimeType = respType;
+      } else {
+        finalMimeType = 'audio/mpeg';
+      }
+    }
+
     const contentLength = res.headers.get('content-length');
     const total = contentLength ? parseInt(contentLength, 10) : 0;
 
-    if (!res.body || total === 0) {
-      return await res.blob();
+    if (!res.body || total === 0 || !onProgress) {
+      const rawBlob = await res.blob();
+      if (rawBlob.type && rawBlob.type.startsWith('audio/')) {
+        return rawBlob;
+      }
+      return new Blob([rawBlob], { type: finalMimeType });
     }
 
     const reader = res.body.getReader();
@@ -519,7 +596,7 @@ export class GoogleDriveService {
       }
     }
 
-    return new Blob(chunks, { type: 'audio/mpeg' });
+    return new Blob(chunks, { type: finalMimeType });
   }
 }
 
