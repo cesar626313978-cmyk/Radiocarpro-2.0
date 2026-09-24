@@ -461,8 +461,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               : 'shadow-[0_0_60px_rgba(124,58,237,0.45),0_0_110px_rgba(99,102,241,0.25)]'
           }`}
           style={{
-            width: 'min(92vw, 90vh, 580px)',
-            height: 'min(92vw, 90vh, 580px)',
+            width: 'min(94vw, 84vh, 560px)',
+            height: 'min(94vw, 84vh, 560px)',
             touchAction: 'none',
           }}
           title="Progreso de audición sincronizado (12:00 a 00:00). Puedes pulsar o arrastrar para saltar a cualquier punto."
