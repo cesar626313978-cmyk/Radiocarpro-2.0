@@ -94,7 +94,7 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
           <div className="font-mono-tech text-[10px] sm:text-[11px] truncate flex items-center gap-1.5 mt-0.5">
             {isDrive ? (
               <span className="text-[#4edea3] truncate font-bold">
-                ● Google Drive • /mimusica {currentDriveTrack?.size ? `• ${(currentDriveTrack.size / (1024*1024)).toFixed(1)} MB` : ''}
+                ● {currentDriveTrack?.album ? `📁 ${currentDriveTrack.album}` : 'Google Drive'} {currentDriveTrack?.artist ? `• ${currentDriveTrack.artist}` : ''}
               </span>
             ) : playbackStatus === 'buffering' ? (
               <span className="text-[#F59E0B] font-bold flex items-center gap-1">

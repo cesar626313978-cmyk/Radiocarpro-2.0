@@ -802,7 +802,7 @@ export default function App() {
       />
 
       {/* Main Layout Container */}
-      <div className="flex flex-1 relative z-10">
+      <div className="flex flex-1 relative z-10 min-w-0 overflow-x-hidden">
         {/* Desktop Side Navigation */}
         <SideNav
           currentTab={currentTab}
@@ -811,8 +811,8 @@ export default function App() {
         />
 
         {/* Main Content Area - Views stay persistent in DOM to prevent reload/waiting */}
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 w-full max-w-[1920px] mx-auto pb-36 md:pb-28">
-          <div className={currentTab === 'descubrir' ? 'block' : 'hidden'}>
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 w-full max-w-[1920px] mx-auto pb-36 md:pb-28 min-w-0 overflow-x-hidden">
+          <div className={currentTab === 'descubrir' ? 'block w-full min-w-0' : 'hidden'}>
             <DiscoverView
               currentStation={currentStation}
               isPlaying={isPlaying}
@@ -828,7 +828,7 @@ export default function App() {
             />
           </div>
 
-          <div className={currentTab === 'favoritas' ? 'block' : 'hidden'}>
+          <div className={currentTab === 'favoritas' ? 'block w-full min-w-0' : 'hidden'}>
             <FavoritesView
               favoriteStations={favoriteStationObjects}
               currentStation={currentStation}
@@ -844,7 +844,7 @@ export default function App() {
             />
           </div>
 
-          <div className={currentTab === 'drive' ? 'block' : 'hidden'}>
+          <div className={currentTab === 'drive' ? 'block w-full min-w-0' : 'hidden'}>
             <DriveMusicView
               onSwitchToRadio={() => handleSelectTab('descubrir')}
               activeSource={activeSource}

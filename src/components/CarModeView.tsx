@@ -342,6 +342,20 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     return activeTrack?.artist || 'AudioCar Synth Collective';
   }, [isDriveConnected, activeSource, isPlaying, currentStation, activeTrack]);
 
+  // Folder name in playback (or radio station)
+  const playingFolderName = useMemo(() => {
+    if (activeSource === 'radio') {
+      return currentStation ? currentStation.name : 'Radio en Directo';
+    }
+    if (currentDriveTrack?.album && currentDriveTrack.album !== 'Drive') {
+      return currentDriveTrack.album;
+    }
+    if (activeTrack?.album && activeTrack.album !== 'Drive') {
+      return activeTrack.album;
+    }
+    return '/mimusica';
+  }, [activeSource, currentStation, currentDriveTrack, activeTrack]);
+
   // Toggle Fullscreen
   const handleToggleFullscreen = async () => {
     try {
@@ -752,6 +766,26 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     <span className="font-bold">Local</span>
                     {localTime && <span className="text-cyan-400 font-semibold">• {localTime}</span>}
                   </div>
+                </div>
+
+                {/* 2.5 FOLDER IN PLAYBACK BADGE (Información de la carpeta que se está reproduciendo) */}
+                <div className="flex items-center justify-center shrink-0 max-w-[88%] sm:max-w-sm mt-0.5 sm:mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('library')}
+                    title="Ver carpeta en la biblioteca"
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#041422]/95 border border-cyan-400/50 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.3)] hover:border-cyan-300 hover:bg-[#062035] transition-all cursor-pointer truncate max-w-full"
+                  >
+                    <span className="material-symbols-outlined text-[12px] sm:text-[14px] text-[#4edea3] shrink-0">
+                      {activeSource === 'radio' ? 'radio' : 'folder'}
+                    </span>
+                    <span className="text-[8px] sm:text-[10px] font-mono tracking-wider uppercase text-cyan-400/80 font-bold shrink-0">
+                      {activeSource === 'radio' ? 'Emisora:' : 'Carpeta:'}
+                    </span>
+                    <span className="text-[9px] sm:text-[11px] font-mono font-black text-white truncate max-w-[150px] sm:max-w-[220px]">
+                      {playingFolderName}
+                    </span>
+                  </button>
                 </div>
 
                 {/* 3. CENTRAL TRACK TITLE, SUBTITLE & VISUALIZER */}
