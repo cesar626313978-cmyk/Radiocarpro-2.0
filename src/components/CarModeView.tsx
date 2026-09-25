@@ -4,6 +4,7 @@ import { DriveAudioFile } from '../types/drive';
 import { driveAudioEngine } from '../services/driveAudioEngine';
 import { googleDriveService } from '../services/googleDriveService';
 import { teslaBackgroundService } from '../services/teslaBackgroundService';
+import { DEFAULT_CAR_TRACKS } from '../constants/carTracks';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { RealisticSpaceCosmos } from './RealisticSpaceCosmos';
 import { motion, AnimatePresence } from 'motion/react';
@@ -24,52 +25,6 @@ interface CarModeViewProps {
   drivePlaylist?: DriveAudioFile[];
   onSelectDriveTrack?: (track: DriveAudioFile, index: number) => void;
 }
-
-// 6 Default High-Fidelity Cyber Driving Tracks matching Screenshot 2 exactly
-const DEFAULT_CAR_TRACKS: DriveAudioFile[] = [
-  {
-    id: 'track-1',
-    name: 'Nightcall Horizon.mp3',
-    artist: 'Kavinsky & Cyberwave',
-    album: 'Neon Drive OST',
-    duration: 215, // 03:35
-  },
-  {
-    id: 'track-2',
-    name: 'Neon Supercharger.mp3',
-    artist: 'AudioCar Synth Collective',
-    album: 'Midnight Velocity',
-    duration: 184, // 03:04
-  },
-  {
-    id: 'track-3',
-    name: 'Autopilot Coastline (Deep House Mix).mp3',
-    artist: 'Solaris Wave',
-    album: 'Sunset Highway',
-    duration: 242, // 04:02
-  },
-  {
-    id: 'track-4',
-    name: 'Midnight Cruising 120km/h.mp3',
-    artist: 'Aero Dynamics',
-    album: 'Cyber Nightrun',
-    duration: 198, // 03:18
-  },
-  {
-    id: 'track-5',
-    name: 'Cruisin Speed - Neon Lights Drive.mp3',
-    artist: 'Electro Drive',
-    album: 'Cyber Odyssey',
-    duration: 230, // 03:50
-  },
-  {
-    id: 'track-6',
-    name: 'Starlight Highway 140km/h.mp3',
-    artist: 'Cyberwave Syndicate',
-    album: 'Hyperdrive',
-    duration: 255, // 04:15
-  },
-];
 
 export const CarModeView: React.FC<CarModeViewProps> = ({
   activeSource,
@@ -158,6 +113,36 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     });
     return unsub;
   }, []);
+
+  // Sync MIX (shuffle) & LOOP (repeat) state with engine
+  useEffect(() => {
+    driveAudioEngine.setShuffle(isMixActive);
+  }, [isMixActive]);
+
+  useEffect(() => {
+    driveAudioEngine.setRepeat(isLoopActive);
+  }, [isLoopActive]);
+
+  // Ensure drive engine has playlist populated with allTracks
+  useEffect(() => {
+    const curr = driveAudioEngine.getPlaylist();
+    if (!curr || curr.length === 0) {
+      driveAudioEngine.setPlaylist(allTracks, selectedDemoIndex);
+    }
+  }, [allTracks, selectedDemoIndex]);
+
+  // Track reset guard to eliminate reverse-spin visual jump of progress stroke
+  const prevTrackIdRef = useRef<string | undefined>(activeTrack?.id);
+  const [isResettingProgress, setIsResettingProgress] = useState(false);
+
+  useEffect(() => {
+    if (activeTrack?.id !== prevTrackIdRef.current) {
+      prevTrackIdRef.current = activeTrack?.id;
+      setIsResettingProgress(true);
+      const timer = setTimeout(() => setIsResettingProgress(false), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTrack?.id]);
 
   // Sync time counter with driveAudioEngine when playing real Drive audio
   useEffect(() => {
@@ -377,7 +362,6 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   // Play a specific track from the Biblioteca list
   const handleSelectTrack = (track: DriveAudioFile, index: number) => {
     setSelectedDemoIndex(index);
-    setPlaybackCurrentTime(0);
     if (track.duration) {
       setPlaybackDuration(track.duration);
     }
@@ -386,6 +370,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
       onSelectDriveTrack(track, index);
     } else {
       const token = googleDriveService.getToken();
+      driveAudioEngine.setPlaylist(allTracks, index);
       driveAudioEngine.playTrack(track, token || undefined);
       if (!isPlaying) {
         onTogglePlay();
@@ -595,7 +580,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   strokeDasharray={2 * Math.PI * 95.5}
                   strokeDashoffset={(2 * Math.PI * 95.5) * (1 - progressRatio)}
                   filter="url(#orbNeonGlow)"
-                  className="transition-[stroke-dashoffset] duration-150 ease-out"
+                  className={isResettingProgress ? '' : 'transition-[stroke-dashoffset] duration-150 ease-out'}
                 />
 
                 {/* 3. Ultra-Bright White Specular Core Filament */}
@@ -610,13 +595,13 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   strokeDasharray={2 * Math.PI * 95.5}
                   strokeDashoffset={(2 * Math.PI * 95.5) * (1 - progressRatio)}
                   opacity="0.9"
-                  className="transition-[stroke-dashoffset] duration-150 ease-out"
+                  className={isResettingProgress ? '' : 'transition-[stroke-dashoffset] duration-150 ease-out'}
                 />
               </g>
             ) : null}
 
             {/* LEADING HEAD TRACER: Luminescent jewel bead & flare moving with audio progression */}
-            {progressRatio > 0 && (
+            {!isResettingProgress && progressRatio > 0.005 && (
               <g>
                 {/* Horizontal Flare beam wing */}
                 <line
@@ -714,7 +699,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.25 }}
-                className="relative z-10 w-full h-full flex flex-col items-center justify-between py-1.5 sm:py-2.5 px-2 sm:px-4"
+                className="relative z-10 w-full h-full flex flex-col items-center justify-between py-1 sm:py-2.5 px-2 sm:px-4"
               >
                 {/* 1. TOP ORANGE PILL: Conectar Drive (Smaller, elegant compact design) */}
                 <button
@@ -726,11 +711,11 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       window.location.reload();
                     }
                   }}
-                  className="group relative flex items-center justify-between gap-2 px-3 sm:px-3.5 py-1 sm:py-1.2 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_18px_rgba(245,158,11,0.45)] hover:shadow-[0_0_24px_rgba(245,158,11,0.65)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0"
+                  className="group relative flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-0.5 sm:py-1.2 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_18px_rgba(245,158,11,0.45)] hover:shadow-[0_0_24px_rgba(245,158,11,0.65)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0"
                   title="Conectar o sincronizar Google Drive"
                 >
-                  <div className="flex items-center gap-1.5 text-white font-bold text-[11px] sm:text-xs tracking-wide">
-                    <span className="material-symbols-outlined text-sm sm:text-base text-amber-100">hard_drive</span>
+                  <div className="flex items-center gap-1.5 text-white font-bold text-[10px] sm:text-xs tracking-wide">
+                    <span className="material-symbols-outlined text-xs sm:text-base text-amber-100">hard_drive</span>
                     <span>{isDriveConnected ? 'Google Drive' : 'Conectar Drive'}</span>
                   </div>
 
@@ -746,10 +731,10 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 </button>
 
                 {/* 2. STATUS BADGES ROW: [ REPRODUCIENDO ]  [ Tiempo Local ] (Kept compact to prevent circular edge overflow) */}
-                <div className="flex items-center gap-2 text-[10px] sm:text-[11px] font-mono tracking-wider justify-center shrink-0">
-                  <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[11px] font-mono tracking-wider justify-center shrink-0">
+                  <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
                     <span
-                      className={`w-2 h-2 rounded-full ${
+                      className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
                         isPlaying ? 'bg-[#4edea3] animate-pulse shadow-[0_0_6px_#4edea3]' : 'bg-[#06b6d4]'
                       }`}
                     />
@@ -758,45 +743,56 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         ? 'BÚFER...'
                         : isPlaying
                         ? 'REPRODUCIENDO'
-                        : 'AUDIO EN ESPERA'}
+                        : 'EN ESPERA'}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
-                    <span className="text-xs">🌤️</span>
-                    <span className="font-bold">Tiempo Local</span>
+                  <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
+                    <span className="text-[10px] sm:text-xs">🌤️</span>
+                    <span className="font-bold">Local</span>
                     {localTime && <span className="text-cyan-400 font-semibold">• {localTime}</span>}
                   </div>
                 </div>
 
                 {/* 3. CENTRAL TRACK TITLE, SUBTITLE & VISUALIZER */}
-                <div className="w-full px-4 max-w-sm sm:max-w-md text-center shrink-0 flex flex-col items-center">
-                  <h1
-                    className="text-lg sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] truncate w-full"
-                    title={displayTitle}
-                  >
-                    {displayTitle}
-                  </h1>
-                  <p
-                    className="text-xs sm:text-sm font-semibold text-amber-300 mt-0.5 truncate max-w-full drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]"
-                    title={displaySubtitle}
-                  >
-                    {displaySubtitle}
-                  </p>
+                <div className="w-full px-2 sm:px-4 max-w-sm sm:max-w-md text-center shrink-0 flex flex-col items-center min-h-[58px] sm:min-h-[72px] justify-center">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={displayTitle}
+                      initial={{ opacity: 0, y: 3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -3 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                      className="w-full flex flex-col items-center"
+                    >
+                      <h1
+                        className="text-base sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] truncate w-full"
+                        title={displayTitle}
+                      >
+                        {displayTitle}
+                      </h1>
+                      <p
+                        className="text-[11px] sm:text-sm font-semibold text-amber-300 mt-0.5 truncate max-w-full drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]"
+                        title={displaySubtitle}
+                      >
+                        {displaySubtitle}
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
 
-                  {/* Equalizer live audio wave bars when playing to fill vertical space organically */}
-                  {isPlaying ? (
-                    <div className="flex items-center justify-center gap-1.5 mt-2 h-4" title="Audio en reproducción">
-                      <span className="w-1 h-2.5 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_6px_#22d3ee]" />
-                      <span className="w-1 h-4 bg-[#4edea3] rounded-full animate-pulse [animation-delay:150ms] shadow-[0_0_6px_#4edea3]" />
+                  {/* Equalizer live audio wave bars when playing or buffering to maintain rock-solid visual stability */}
+                  {isPlaying || playbackStatus === 'buffering' ? (
+                    <div className="flex items-center justify-center gap-1 mt-1 sm:mt-1.5 h-3.5" title="Audio en reproducción">
+                      <span className="w-1 h-2 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_6px_#22d3ee]" />
+                      <span className="w-1 h-3.5 bg-[#4edea3] rounded-full animate-pulse [animation-delay:150ms] shadow-[0_0_6px_#4edea3]" />
                       <span className="w-1 h-2 bg-amber-400 rounded-full animate-pulse [animation-delay:300ms] shadow-[0_0_6px_#f59e0b]" />
-                      <span className="w-1 h-3.5 bg-cyan-300 rounded-full animate-pulse [animation-delay:450ms] shadow-[0_0_6px_#22d3ee]" />
-                      <span className="w-1 h-4 bg-cyan-400 rounded-full animate-pulse [animation-delay:200ms] shadow-[0_0_6px_#22d3ee]" />
+                      <span className="w-1 h-3 bg-cyan-300 rounded-full animate-pulse [animation-delay:450ms] shadow-[0_0_6px_#22d3ee]" />
+                      <span className="w-1 h-3.5 bg-cyan-400 rounded-full animate-pulse [animation-delay:200ms] shadow-[0_0_6px_#22d3ee]" />
                       <span className="w-1 h-2 bg-[#4edea3] rounded-full animate-pulse [animation-delay:350ms] shadow-[0_0_6px_#4edea3]" />
                     </div>
                   ) : (
-                    <div className="h-4 mt-2 flex items-center justify-center">
-                      <span className="text-[10px] font-mono text-cyan-400/60 uppercase tracking-widest">
+                    <div className="h-3.5 mt-1 sm:mt-1.5 flex items-center justify-center">
+                      <span className="text-[9px] sm:text-[10px] font-mono text-cyan-400/60 uppercase tracking-widest">
                         {activeTrack?.album || (activeSource === 'drive' ? 'Google Drive Audio' : 'Audio Cockpit')}
                       </span>
                     </div>
@@ -804,13 +800,13 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 </div>
 
                 {/* 4. TRANSPORT 5-BUTTON DECK */}
-                <div className="flex items-center justify-center gap-2 sm:gap-3 w-full px-2 shrink-0">
+                <div className="flex items-center justify-center gap-1.5 sm:gap-3 w-full px-1 shrink-0">
                   {/* MIX / Shuffle Button (Dimmed and inactive in Radio mode) */}
                   <button
                     type="button"
                     disabled={isRadioMode}
                     onClick={isRadioMode ? undefined : () => setIsMixActive(!isMixActive)}
-                    className={`w-12 sm:w-14 h-15 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1.5 transition-all ${
+                    className={`w-10 sm:w-14 h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
                       isRadioMode
                         ? 'bg-[#030d17]/40 border border-cyan-500/10 opacity-20 cursor-not-allowed select-none'
                         : isMixActive
@@ -819,14 +815,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     }`}
                     title={isRadioMode ? 'Modo MIX no aplicable a radio en directo' : 'Reproducción aleatoria (MIX)'}
                   >
-                    <span className={`text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
+                    <span className={`text-[8px] sm:text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
                       MIX
                     </span>
-                    <span className={`material-symbols-outlined text-lg sm:text-xl ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-200'}`}>
+                    <span className={`material-symbols-outlined text-base sm:text-xl ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-200'}`}>
                       shuffle
                     </span>
                     <span
-                      className={`w-5 h-[2px] rounded-full ${
+                      className={`w-4 sm:w-5 h-[2px] rounded-full ${
                         !isRadioMode && isMixActive ? 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]' : 'bg-transparent'
                       }`}
                     />
@@ -836,54 +832,56 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setPlaybackCurrentTime(0);
-                      if (onPrev) {
+                      if (activeSource === 'drive') {
+                        driveAudioEngine.playPrev(true);
+                      } else if (onPrev) {
                         onPrev();
                       } else {
                         setSelectedDemoIndex(prev => (prev - 1 + allTracks.length) % allTracks.length);
                       }
                     }}
-                    className="w-12 sm:w-14 h-15 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1.5 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
+                    className="w-10 sm:w-14 h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
                     title={isRadioMode ? 'Emisora anterior' : 'Pista anterior'}
                   >
-                    <span className="text-[9px] font-mono font-bold text-cyan-300">PREV</span>
-                    <span className="material-symbols-outlined text-lg sm:text-xl text-cyan-100">skip_previous</span>
-                    <span className="w-5 h-[2px] bg-transparent" />
+                    <span className="text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">PREV</span>
+                    <span className="material-symbols-outlined text-base sm:text-xl text-cyan-100">skip_previous</span>
+                    <span className="w-4 sm:w-5 h-[2px] bg-transparent" />
                   </button>
 
                   {/* PLAY / PAUSE Button (Center - Larger with Amber/Gold Glow) */}
                   <button
                     type="button"
                     onClick={onTogglePlay}
-                    className="w-15 sm:w-18 h-17 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1c1917]/95 via-[#0c0a09]/95 to-[#000000] border-2 border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.55),inset_0_1px_3px_rgba(255,255,255,0.3)] flex flex-col items-center justify-between p-1.5 sm:p-2 transition-all hover:scale-103 active:scale-95 cursor-pointer"
+                    className="w-14 sm:w-18 h-15 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1c1917]/95 via-[#0c0a09]/95 to-[#000000] border-2 border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.55),inset_0_1px_3px_rgba(255,255,255,0.3)] flex flex-col items-center justify-between p-1 sm:p-2 transition-all hover:scale-103 active:scale-95 cursor-pointer"
                     title={isPlaying ? 'Pausa' : 'Reproducir'}
                   >
-                    <span className="text-[9px] sm:text-[10px] font-mono font-black text-amber-300 uppercase tracking-wider">
+                    <span className="text-[8px] sm:text-[10px] font-mono font-black text-amber-300 uppercase tracking-wider">
                       {isPlaying ? 'PAUSE' : 'PLAY'}
                     </span>
-                    <span className="material-symbols-outlined text-2xl sm:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]">
+                    <span className="material-symbols-outlined text-xl sm:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]">
                       {isPlaying ? 'pause' : 'play_arrow'}
                     </span>
-                    <span className="w-7 h-[3px] rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                    <span className="w-6 sm:w-7 h-[3px] rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
                   </button>
 
                   {/* NEXT Button */}
                   <button
                     type="button"
                     onClick={() => {
-                      setPlaybackCurrentTime(0);
-                      if (onNext) {
+                      if (activeSource === 'drive') {
+                        driveAudioEngine.playNext(true);
+                      } else if (onNext) {
                         onNext();
                       } else {
                         setSelectedDemoIndex(prev => (prev + 1) % allTracks.length);
                       }
                     }}
-                    className="w-12 sm:w-14 h-15 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1.5 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
+                    className="w-10 sm:w-14 h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
                     title={isRadioMode ? 'Emisora siguiente' : 'Pista siguiente'}
                   >
-                    <span className="text-[9px] font-mono font-bold text-cyan-300">NEXT</span>
-                    <span className="material-symbols-outlined text-lg sm:text-xl text-cyan-100">skip_next</span>
-                    <span className="w-5 h-[2px] bg-transparent" />
+                    <span className="text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">NEXT</span>
+                    <span className="material-symbols-outlined text-base sm:text-xl text-cyan-100">skip_next</span>
+                    <span className="w-4 sm:w-5 h-[2px] bg-transparent" />
                   </button>
 
                   {/* LOOP / Repeat Button (Dimmed and inactive in Radio mode) */}
@@ -891,7 +889,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     disabled={isRadioMode}
                     onClick={isRadioMode ? undefined : () => setIsLoopActive(!isLoopActive)}
-                    className={`w-12 sm:w-14 h-15 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1.5 transition-all ${
+                    className={`w-10 sm:w-14 h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
                       isRadioMode
                         ? 'bg-[#030d17]/40 border border-cyan-500/10 opacity-20 cursor-not-allowed select-none'
                         : isLoopActive
@@ -900,14 +898,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     }`}
                     title={isRadioMode ? 'Modo LOOP no aplicable a radio en directo' : 'Repetir pista (LOOP)'}
                   >
-                    <span className={`text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
+                    <span className={`text-[8px] sm:text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
                       LOOP
                     </span>
-                    <span className={`material-symbols-outlined text-lg sm:text-xl ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-200'}`}>
+                    <span className={`material-symbols-outlined text-base sm:text-xl ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-200'}`}>
                       repeat
                     </span>
                     <span
-                      className={`w-5 h-[2px] rounded-full ${
+                      className={`w-4 sm:w-5 h-[2px] rounded-full ${
                         !isRadioMode && isLoopActive ? 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]' : 'bg-transparent'
                       }`}
                     />
@@ -916,12 +914,12 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
                 {/* 5. MONOSPACE DIGITAL TIME COUNTER */}
                 <div 
-                  className="text-cyan-300 font-mono tracking-widest text-xs sm:text-sm font-bold drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] select-none shrink-0"
+                  className="text-cyan-300 font-mono tracking-widest text-[11px] sm:text-sm font-bold drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] select-none shrink-0"
                   title="Progreso de audición sincronizado con el archivo de audio"
                 >
                   {activeSource === 'radio' ? (
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-emerald-400 font-mono">
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-ping" />
                       <span>EN DIRECTO</span>
                       <span className="text-cyan-500 mx-1">•</span>
                       <span className="text-cyan-300">STREAMING</span>
@@ -929,37 +927,37 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   ) : (
                     <>
                       <span className="text-cyan-200">{formatTime(playbackCurrentTime)}</span>
-                      <span className="text-cyan-500 mx-1.5">/</span>
+                      <span className="text-cyan-500 mx-1">/</span>
                       <span className="text-cyan-400">{formatTime(effectiveDuration)}</span>
                     </>
                   )}
                 </div>
 
                 {/* 6. UTILITY CONTROLS: [ Privacidad ] [ Audio Coche ] (Integrated side-by-side in wide lower-mid section) */}
-                <div className="flex items-center justify-center gap-2.5 sm:gap-3 shrink-0">
+                <div className="flex items-center justify-center gap-2 sm:gap-3 shrink-0">
                   <button
                     type="button"
                     onClick={() => setShowPrivacyModal(true)}
-                    className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[10px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
+                    className="flex items-center gap-1 px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
                     title="Política de Privacidad y Seguridad"
                   >
-                    <span className="material-symbols-outlined text-xs sm:text-sm text-cyan-400">verified_user</span>
+                    <span className="material-symbols-outlined text-[11px] sm:text-sm text-cyan-400">verified_user</span>
                     <span>Privacidad</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setShowCarAudioTip(true)}
-                    className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[10px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
+                    className="flex items-center gap-1 px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
                     title="Consejo de audio si la radio del coche suena a la vez"
                   >
-                    <span className="material-symbols-outlined text-xs sm:text-sm text-amber-400">volume_up</span>
+                    <span className="material-symbols-outlined text-[11px] sm:text-sm text-amber-400">volume_up</span>
                     <span>Audio Coche</span>
                   </button>
                 </div>
 
                 {/* 7. VOLUME SLIDER POD */}
-                <div className="w-full max-w-[270px] sm:max-w-xs flex items-center justify-between gap-1.5 sm:gap-2 px-3 py-1.5 rounded-full bg-[#04141f]/90 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0">
+                <div className="w-full max-w-[240px] sm:max-w-xs flex items-center justify-between gap-1 sm:gap-2 px-2.5 py-1 rounded-full bg-[#04141f]/90 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0">
                   {/* Speaker Mute/Unmute */}
                   <button
                     type="button"
@@ -967,7 +965,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     className="text-cyan-300 hover:text-white transition-colors cursor-pointer"
                     title={volume === 0 ? 'Activar sonido' : 'Silenciar'}
                   >
-                    <span className="material-symbols-outlined text-base sm:text-lg">
+                    <span className="material-symbols-outlined text-sm sm:text-lg">
                       {volume === 0 ? 'volume_off' : 'volume_up'}
                     </span>
                   </button>
@@ -976,13 +974,13 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={handleVolumeDown}
-                    className="w-5 h-5 rounded-full bg-[#072436] hover:bg-[#093550] text-cyan-200 flex items-center justify-center font-bold text-xs cursor-pointer border border-cyan-500/30 transition-all"
+                    className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#072436] hover:bg-[#093550] text-cyan-200 flex items-center justify-center font-bold text-[10px] sm:text-xs cursor-pointer border border-cyan-500/30 transition-all"
                   >
                     −
                   </button>
 
                   {/* Illuminated Range Slider matching reference style with glowing neon light */}
-                  <div className="relative flex-1 flex items-center h-5 cursor-pointer select-none">
+                  <div className="relative flex-1 flex items-center h-4 sm:h-5 cursor-pointer select-none">
                     {/* Dark Groove Track */}
                     <div className="w-full h-1.5 sm:h-2 bg-[#020b13] rounded-full border border-cyan-500/40 overflow-hidden relative shadow-[inset_0_1px_3px_rgba(0,0,0,0.9)]">
                       {/* Vibrant Neon Light Fill */}
@@ -994,7 +992,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
                     {/* Glowing Round Thumb Bead */}
                     <div
-                      className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[#4edea3] border-2 border-[#020b13] shadow-[0_0_8px_#4edea3,0_0_14px_rgba(78,222,163,0.7)] pointer-events-none transition-all duration-75"
+                      className="absolute top-1/2 -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-[#4edea3] border-2 border-[#020b13] shadow-[0_0_8px_#4edea3,0_0_14px_rgba(78,222,163,0.7)] pointer-events-none transition-all duration-75"
                       style={{ left: `calc(${volume} * (100% - 14px))` }}
                     />
 
@@ -1015,13 +1013,13 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={handleVolumeUp}
-                    className="w-5 h-5 rounded-full bg-[#072436] hover:bg-[#093550] text-cyan-200 flex items-center justify-center font-bold text-xs cursor-pointer border border-cyan-500/30 transition-all"
+                    className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#072436] hover:bg-[#093550] text-cyan-200 flex items-center justify-center font-bold text-[10px] sm:text-xs cursor-pointer border border-cyan-500/30 transition-all"
                   >
                     +
                   </button>
 
                   {/* Percentage */}
-                  <span className="text-[10px] sm:text-xs font-mono font-bold text-cyan-300 w-7 text-right">
+                  <span className="text-[9px] sm:text-xs font-mono font-bold text-cyan-300 w-6 sm:w-7 text-right">
                     {Math.round(volume * 100)}%
                   </span>
                 </div>
@@ -1030,10 +1028,10 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setCurrentView('library')}
-                  className="flex items-center gap-2 px-5 sm:px-6 py-1.5 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-xs sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0"
+                  className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0"
                   title="Abrir Biblioteca de Pistas de Audio"
                 >
-                  <span className="material-symbols-outlined text-base sm:text-lg text-cyan-300">
+                  <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
                     radio_button_checked
                   </span>
                   <span>Pistas ({allTracks.length})</span>

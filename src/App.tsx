@@ -130,14 +130,11 @@ export default function App() {
     setDeferredPrompt(null);
   };
 
-  // Favorites IDs state: strictly empty if not connected to Google Drive
+  // Favorites IDs state
   const [favorites, setFavorites] = useState<string[]>(() => {
-    if (!googleDriveService.hasToken() && !initialPairedUser) {
-      return [];
-    }
     try {
       const userKey = getFavsStorageKey(initialPairedUser?.uid);
-      const savedUserFavs = localStorage.getItem(userKey);
+      const savedUserFavs = localStorage.getItem(userKey) || localStorage.getItem('radiostream_favs');
       if (savedUserFavs) {
         const parsed = JSON.parse(savedUserFavs);
         if (Array.isArray(parsed)) return parsed;
@@ -148,14 +145,11 @@ export default function App() {
     }
   });
 
-  // Cached full station objects for favorites: strictly empty if not connected to Google Drive
+  // Cached full station objects for favorites
   const [favoriteStationsMap, setFavoriteStationsMap] = useState<Record<string, RadioStation>>(() => {
-    if (!googleDriveService.hasToken() && !initialPairedUser) {
-      return {};
-    }
     try {
       const userObjsKey = getFavObjsStorageKey(initialPairedUser?.uid);
-      const savedUserObjs = localStorage.getItem(userObjsKey);
+      const savedUserObjs = localStorage.getItem(userObjsKey) || localStorage.getItem('radiostream_fav_objects');
       if (savedUserObjs) {
         const parsed = JSON.parse(savedUserObjs);
         if (parsed && typeof parsed === 'object') return parsed;
@@ -245,108 +239,94 @@ export default function App() {
       const cachedFavsRaw = localStorage.getItem(userFavsKey);
       const cachedObjsRaw = localStorage.getItem(userObjsKey);
 
+      let localFavs: string[] = [];
       if (cachedFavsRaw) {
         try {
           const parsed = JSON.parse(cachedFavsRaw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setFavorites(parsed);
-          }
+          if (Array.isArray(parsed)) localFavs = parsed;
         } catch {}
       }
+      let localObjs: Record<string, RadioStation> = {};
       if (cachedObjsRaw) {
         try {
           const parsedObjs = JSON.parse(cachedObjsRaw);
-          if (parsedObjs && typeof parsedObjs === 'object' && Object.keys(parsedObjs).length > 0) {
-            setFavoriteStationsMap(parsedObjs);
-          }
+          if (parsedObjs && typeof parsedObjs === 'object') localObjs = parsedObjs;
         } catch {}
+      }
+
+      if (localFavs.length > 0) {
+        setFavorites(localFavs);
+      }
+      if (Object.keys(localObjs).length > 0) {
+        setFavoriteStationsMap(localObjs);
       }
 
       // 2. Fetch ground-truth preferences from Firestore database
       const remoteData = await loadUserPreferencesFromFirestore(userId);
+      const remoteFavs = (remoteData && Array.isArray(remoteData.favorites)) ? remoteData.favorites : [];
 
-      if (remoteData && Array.isArray(remoteData.favorites)) {
-        console.log(`[Firestore] Favoritas recuperadas exitosamente para ${targetUser.email || userId}:`, remoteData.favorites);
-        isIncomingUpdateRef.current = true;
-        setFavorites(remoteData.favorites);
+      // Merge local and remote favorites (Union) so no favorites are ever lost across devices
+      const mergedFavorites = Array.from(new Set([...localFavs, ...remoteFavs]));
 
-        let mergedMap: Record<string, RadioStation> = {};
-        if (Array.isArray(remoteData.favoriteStationObjects) && remoteData.favoriteStationObjects.length > 0) {
-          remoteData.favoriteStationObjects.forEach((st: RadioStation) => {
-            if (st && st.id) mergedMap[st.id] = st;
-          });
-        } else {
-          remoteData.favorites.forEach((id: string) => {
-            const found = stations.find(s => s.id === id) || INITIAL_STATIONS.find(s => s.id === id);
-            if (found) mergedMap[id] = found;
-          });
-        }
-
-        setFavoriteStationsMap(prev => {
-          const next = { ...prev, ...mergedMap };
-          try {
-            localStorage.setItem(userObjsKey, JSON.stringify(next));
-          } catch {}
-          return next;
+      let remoteObjsMap: Record<string, RadioStation> = {};
+      if (remoteData && Array.isArray(remoteData.favoriteStationObjects)) {
+        remoteData.favoriteStationObjects.forEach((st: RadioStation) => {
+          if (st && st.id) remoteObjsMap[st.id] = st;
         });
-
-        try {
-          localStorage.setItem(userFavsKey, JSON.stringify(remoteData.favorites));
-          localStorage.setItem('radiostream_favs', JSON.stringify(remoteData.favorites));
-          localStorage.setItem('radiostream_fav_objects', JSON.stringify(mergedMap));
-        } catch {}
-
-        if (pendingFavoriteStationRef.current) {
-          const pendingStation = pendingFavoriteStationRef.current;
-          pendingFavoriteStationRef.current = null;
-          setFavorites(prevFavs => {
-            if (!prevFavs.includes(pendingStation.id)) {
-              return [...prevFavs, pendingStation.id];
-            }
-            return prevFavs;
-          });
-          setFavoriteStationsMap(prevMap => ({
-            ...prevMap,
-            [pendingStation.id]: pendingStation,
-          }));
-        }
-
-        setTimeout(() => {
-          isIncomingUpdateRef.current = false;
-        }, 400);
-      } else {
-        // First time this user logs in and has no document in Firestore:
-        console.log(`[Firestore] Nuevo usuario ${userId} sin documento previo.`);
-        let initialFavsToSave: string[] = [];
-        let initialObjsToSave: RadioStation[] = [];
-
-        if (pendingFavoriteStationRef.current) {
-          const pendingStation = pendingFavoriteStationRef.current;
-          pendingFavoriteStationRef.current = null;
-          initialFavsToSave = [pendingStation.id];
-          initialObjsToSave = [pendingStation];
-          setFavorites(initialFavsToSave);
-          setFavoriteStationsMap({ [pendingStation.id]: pendingStation });
-        } else {
-          setFavorites([]);
-          setFavoriteStationsMap({});
-        }
-
-        await saveUserPreferencesToFirestore(
-          userId,
-          {
-            favorites: initialFavsToSave,
-            favoriteStationObjects: initialObjsToSave,
-            alarms: EMPTY_ALARMS,
-          },
-          true
-        );
-
-        try {
-          localStorage.setItem(userFavsKey, JSON.stringify(initialFavsToSave));
-          localStorage.setItem(userObjsKey, JSON.stringify(initialObjsToSave));
-        } catch {}
       }
+      remoteFavs.forEach((id: string) => {
+        if (!remoteObjsMap[id]) {
+          const found = stations.find(s => s.id === id) || INITIAL_STATIONS.find(s => s.id === id);
+          if (found) remoteObjsMap[id] = found;
+        }
+      });
+
+      const mergedObjsMap = { ...localObjs, ...remoteObjsMap };
+      mergedFavorites.forEach((id: string) => {
+        if (!mergedObjsMap[id]) {
+          const found = stations.find(s => s.id === id) || INITIAL_STATIONS.find(s => s.id === id);
+          if (found) mergedObjsMap[id] = found;
+        }
+      });
+
+      console.log(`[Firestore] Sincronización de favoritas para ${targetUser.email || userId}: Local(${localFavs.length}), Remotas(${remoteFavs.length}), Unidas(${mergedFavorites.length})`);
+      isIncomingUpdateRef.current = true;
+      setFavorites(mergedFavorites);
+      setFavoriteStationsMap(mergedObjsMap);
+
+      try {
+        localStorage.setItem(userFavsKey, JSON.stringify(mergedFavorites));
+        localStorage.setItem(userObjsKey, JSON.stringify(mergedObjsMap));
+        localStorage.setItem('radiostream_favs', JSON.stringify(mergedFavorites));
+        localStorage.setItem('radiostream_fav_objects', JSON.stringify(mergedObjsMap));
+      } catch {}
+
+      if (pendingFavoriteStationRef.current) {
+        const pendingStation = pendingFavoriteStationRef.current;
+        pendingFavoriteStationRef.current = null;
+        if (!mergedFavorites.includes(pendingStation.id)) {
+          mergedFavorites.push(pendingStation.id);
+        }
+        mergedObjsMap[pendingStation.id] = pendingStation;
+        setFavorites([...mergedFavorites]);
+        setFavoriteStationsMap({ ...mergedObjsMap });
+      }
+
+      // Save merged state back to Firestore to ensure complete sync across devices
+      const favObjectsArray: RadioStation[] = Object.values(mergedObjsMap);
+      await saveUserPreferencesToFirestore(
+        userId,
+        {
+          favorites: mergedFavorites,
+          favoriteStationObjects: favObjectsArray,
+          alarms: remoteData?.alarms || EMPTY_ALARMS,
+        },
+        true
+      );
+
+      setTimeout(() => {
+        isIncomingUpdateRef.current = false;
+      }, 400);
     } catch (err) {
       console.warn('[Firestore] Error al cargar preferencias del usuario:', err);
     } finally {
@@ -696,8 +676,8 @@ export default function App() {
       stations.find(s => s.id === stationId) ||
       INITIAL_STATIONS.find(s => s.id === stationId);
 
-    // If not connected to Drive, prompt Google login / Drive connection
-    if (!googleDriveService.hasToken()) {
+    // If not authenticated with Firebase or Google Drive, prompt Google login
+    if (!user && !auth.currentUser && !googleDriveService.hasToken()) {
       if (stationObj) {
         pendingFavoriteStationRef.current = stationObj;
       }
@@ -897,6 +877,8 @@ export default function App() {
               } else if (currentDriveTrack) {
                 const token = googleDriveService.getToken();
                 driveAudioEngine.playTrack(currentDriveTrack, token || undefined);
+              } else {
+                driveAudioEngine.resume();
               }
             } else {
               handleTogglePlay();
@@ -904,14 +886,14 @@ export default function App() {
           }}
           onNext={() => {
             if (activeSource === 'drive') {
-              driveAudioEngine.playNext();
+              driveAudioEngine.playNext(true);
             } else {
               handleNextStation();
             }
           }}
           onPrev={() => {
             if (activeSource === 'drive') {
-              driveAudioEngine.playPrev();
+              driveAudioEngine.playPrev(true);
             } else {
               handlePrevStation();
             }
@@ -956,6 +938,8 @@ export default function App() {
             } else if (currentDriveTrack) {
               const token = googleDriveService.getToken();
               driveAudioEngine.playTrack(currentDriveTrack, token || undefined);
+            } else {
+              driveAudioEngine.resume();
             }
           } else {
             handleTogglePlay();
@@ -963,8 +947,8 @@ export default function App() {
         }}
         onPrevStation={handlePrevStation}
         onNextStation={handleNextStation}
-        onDrivePrev={() => driveAudioEngine.playPrev()}
-        onDriveNext={() => driveAudioEngine.playNext()}
+        onDrivePrev={() => driveAudioEngine.playPrev(true)}
+        onDriveNext={() => driveAudioEngine.playNext(true)}
         volume={volume}
         onVolumeChange={val => {
           setVolume(val);

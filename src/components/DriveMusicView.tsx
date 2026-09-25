@@ -1730,7 +1730,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
             {/* Playback Controls */}
             <div className="flex items-center justify-center gap-4 pt-1 shrink-0">
               <button
-                onClick={() => driveAudioEngine.playPrev()}
+                onClick={() => driveAudioEngine.playPrev(true)}
                 className="neo-button w-12 h-12 bg-[#201f1f] text-white flex items-center justify-center hover:bg-[#353534]"
                 title="Pista Anterior"
               >
@@ -1748,7 +1748,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               </button>
 
               <button
-                onClick={() => driveAudioEngine.playNext()}
+                onClick={() => driveAudioEngine.playNext(true)}
                 className="neo-button w-12 h-12 bg-[#201f1f] text-white flex items-center justify-center hover:bg-[#353534]"
                 title="Pista Siguiente"
               >
