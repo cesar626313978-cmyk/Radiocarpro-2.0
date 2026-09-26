@@ -3,7 +3,7 @@ import { DriveAudioFile } from '../types/drive';
 /**
  * IndexedDB storage service for Google Drive audio files and metadata.
  * Implements persistent caching (`myradiopro_drive_cache`) with stores `metadata` and `audio_blobs`,
- * and handles QuotaExceededError with LRU (Least Recently Used) eviction.
+ * and handles QuotaExceededError with LRU (Least Recently Used) eviction and Safeguard 3.
  */
 
 const DB_NAME = 'myradiopro_drive_cache';
@@ -118,7 +118,32 @@ export class DriveCacheService {
     }
   }
 
+  /**
+   * Salvaguarda 3: Verificación proactiva de cuota de almacenamiento del navegador
+   */
+  public async checkAndEnforceStorageQuota(): Promise<void> {
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
+      try {
+        const estimate = await navigator.storage.estimate();
+        if (estimate.usage !== undefined && estimate.quota !== undefined && estimate.quota > 0) {
+          const usageRatio = estimate.usage / estimate.quota;
+          if (usageRatio > 0.8) {
+            console.warn(`[DriveCacheService] Uso de almacenamiento elevado (${Math.round(usageRatio * 100)}%). Ejecutando purga LRU preventiva...`);
+            for (let i = 0; i < 4; i++) {
+              const evicted = await this.evictOldestBlob();
+              if (!evicted) break;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[DriveCacheService] Error comprobando cuota de almacenamiento:', err);
+      }
+    }
+  }
+
   public async saveBlob(fileId: string, blob: Blob): Promise<void> {
+    await this.checkAndEnforceStorageQuota();
+
     const record: CachedBlobRecord = {
       fileId,
       blob,
@@ -142,14 +167,14 @@ export class DriveCacheService {
         saved = true;
       } catch (err: any) {
         if (err && (err.name === 'QuotaExceededError' || err.code === 22)) {
-          console.warn('IndexedDB QuotaExceededError encountered. Evicting oldest cached blob (LRU)...');
+          console.warn('[DriveCacheService] QuotaExceededError detectado. Desalojando blob más antiguo (LRU)...');
           const evicted = await this.evictOldestBlob();
           if (!evicted) {
-            console.error('Could not evict any more blobs to free up storage quota.');
+            console.error('[DriveCacheService] No se pudieron liberar más blobs en IndexedDB.');
             break;
           }
         } else {
-          console.error('Error saving blob to IndexedDB:', err);
+          console.error('[DriveCacheService] Error guardando blob en IndexedDB:', err);
           break;
         }
       }
@@ -157,7 +182,7 @@ export class DriveCacheService {
     }
   }
 
-  private async evictOldestBlob(): Promise<boolean> {
+  public async evictOldestBlob(): Promise<boolean> {
     try {
       const db = await this.getDB();
       return await new Promise((resolve, reject) => {

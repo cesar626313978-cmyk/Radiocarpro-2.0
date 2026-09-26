@@ -37,8 +37,17 @@ class RadioAudioEngine {
   private lastProgressTimestamp = Date.now();
   private waitingDebounceTimer: number | null = null;
   private stallCount = 0;
+  private bufferSize = '128KB';
 
   constructor() {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('radiostream_buffer_size');
+        if (saved && ['64KB', '128KB', '256KB', '512KB'].includes(saved)) {
+          this.bufferSize = saved;
+        }
+      } catch {}
+    }
     // Listen to global network online/offline and visibility transitions in Tesla
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
@@ -578,6 +587,19 @@ class RadioAudioEngine {
     return () => {
       this.sleepTimerListeners = this.sleepTimerListeners.filter(cb => cb !== callback);
     };
+  }
+
+  public getBufferSize(): string {
+    return this.bufferSize;
+  }
+
+  public setBufferSize(size: string): void {
+    if (['64KB', '128KB', '256KB', '512KB'].includes(size)) {
+      this.bufferSize = size;
+      try {
+        localStorage.setItem('radiostream_buffer_size', size);
+      } catch {}
+    }
   }
 }
 

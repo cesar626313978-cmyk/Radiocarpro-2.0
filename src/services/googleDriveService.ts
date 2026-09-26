@@ -1,5 +1,6 @@
 import { DriveAudioFile } from '../types/drive';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { driveDownloadManager } from './driveDownloadManager';
 
 const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
 
@@ -595,6 +596,26 @@ export class GoogleDriveService {
     onProgress?: (percent: number) => void,
     expectedMimeType?: string
   ): Promise<Blob> {
+    if (!onProgress) {
+      try {
+        const rawBlob = await driveDownloadManager.fetchDriveMediaBinary(fileId, token);
+        let finalMimeType = expectedMimeType;
+        if (!finalMimeType || finalMimeType === 'application/octet-stream') {
+          if (rawBlob.type && rawBlob.type.startsWith('audio/')) {
+            finalMimeType = rawBlob.type;
+          } else {
+            finalMimeType = 'audio/mpeg';
+          }
+        }
+        if (rawBlob.type && rawBlob.type.startsWith('audio/')) {
+          return rawBlob;
+        }
+        return new Blob([rawBlob], { type: finalMimeType });
+      } catch (err) {
+        console.warn('[GoogleDriveService] Error con driveDownloadManager, intentando fallback directo:', err);
+      }
+    }
+
     const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&acknowledgeAbuse=true`;
     let res = await this.fetchWithBackoff(url, {
       headers: { Authorization: `Bearer ${token}` },

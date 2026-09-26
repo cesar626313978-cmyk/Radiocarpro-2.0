@@ -212,21 +212,47 @@ async function executeFirestoreSave(
   const path = `users/${userId}`;
   try {
     const userRef = doc(db, 'users', userId);
+    const payload: Record<string, any> = {
+      userId,
+      email: auth.currentUser?.email || '',
+      displayName: auth.currentUser?.displayName || '',
+      photoURL: auth.currentUser?.photoURL || '',
+      favorites: data.favorites || [],
+      favoriteStationObjects: data.favoriteStationObjects || [],
+      alarms: data.alarms || [],
+      updatedAt: new Date().toISOString(),
+    };
+    if (data.settings) {
+      payload.settings = data.settings;
+    }
+    await setDoc(userRef, payload, { merge: true });
+    console.log(`[Firestore] Sincronización guardada exitosamente (${data.favorites.length} favoritas, settings: ${data.settings ? 'sí' : 'no'}) para UID: ${userId}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Directly save or update user settings in Firestore
+ */
+export async function saveUserSettingsToFirestore(
+  userId: string,
+  settings: Record<string, unknown>
+): Promise<void> {
+  if (isQuotaExceeded || !userId) return;
+  const path = `users/${userId}`;
+  try {
+    const userRef = doc(db, 'users', userId);
     await setDoc(
       userRef,
       {
         userId,
-        email: auth.currentUser?.email || '',
-        displayName: auth.currentUser?.displayName || '',
-        photoURL: auth.currentUser?.photoURL || '',
-        favorites: data.favorites || [],
-        favoriteStationObjects: data.favoriteStationObjects || [],
-        alarms: data.alarms || [],
+        settings,
         updatedAt: new Date().toISOString(),
       },
       { merge: true }
     );
-    console.log(`[Firestore] Sincronización guardada exitosamente (${data.favorites.length} favoritas) para UID: ${userId}`);
+    console.log(`[Firestore] Ajustes guardados en la nube para UID: ${userId}`, settings);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

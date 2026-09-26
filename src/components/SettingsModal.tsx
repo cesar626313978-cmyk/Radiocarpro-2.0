@@ -10,6 +10,20 @@ interface SettingsModalProps {
   onToggleLang: () => void;
   favoritesCount: number;
   alarmsCount: number;
+  onSaveSettings?: (settings: {
+    bufferSize: string;
+    driveCrossfade: number;
+    fadeOutMins: number;
+    synthFallback: boolean;
+    lowDataMode: boolean;
+  }) => void;
+  currentSettings?: {
+    bufferSize?: string;
+    driveCrossfade?: number;
+    fadeOutMins?: number;
+    synthFallback?: boolean;
+    lowDataMode?: boolean;
+  };
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -19,26 +33,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleLang,
   favoritesCount,
   alarmsCount,
+  onSaveSettings,
+  currentSettings,
 }) => {
-  const [bufferSize, setBufferSize] = useState('128KB');
-  const [fadeOutMins, setFadeOutMins] = useState(() => {
+  const getInitialBufferSize = () => {
+    if (currentSettings?.bufferSize) return currentSettings.bufferSize;
+    try {
+      const saved = localStorage.getItem('radiostream_buffer_size');
+      if (saved && ['64KB', '128KB', '256KB', '512KB'].includes(saved)) return saved;
+    } catch {}
+    return driveAudioEngine.getBufferSize() || audioEngine.getBufferSize() || '128KB';
+  };
+
+  const getInitialCrossfade = () => {
+    if (typeof currentSettings?.driveCrossfade === 'number') return currentSettings.driveCrossfade;
+    try {
+      const saved = localStorage.getItem('myradiopro_drive_crossfade');
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if ([0, 3, 5, 8, 12].includes(val)) return val;
+      }
+    } catch {}
+    return driveAudioEngine.getCrossfadeSeconds();
+  };
+
+  const getInitialFadeOut = () => {
+    if (typeof currentSettings?.fadeOutMins === 'number') return currentSettings.fadeOutMins;
     try {
       const saved = localStorage.getItem('radiostream_fade_mins');
       return saved ? parseInt(saved, 10) : 5;
     } catch {
       return 5;
     }
+  };
+
+  const [bufferSize, setBufferSize] = useState<string>(getInitialBufferSize);
+  const [fadeOutMins, setFadeOutMins] = useState<number>(getInitialFadeOut);
+  const [driveCrossfade, setDriveCrossfade] = useState<number>(getInitialCrossfade);
+  const [synthFallback, setSynthFallback] = useState<boolean>(() => {
+    if (typeof currentSettings?.synthFallback === 'boolean') return currentSettings.synthFallback;
+    try {
+      return localStorage.getItem('myradiopro_synth_fallback') !== 'false';
+    } catch {
+      return true;
+    }
   });
-  const [driveCrossfade, setDriveCrossfade] = useState<number>(() => driveAudioEngine.getCrossfadeSeconds());
-  const [synthFallback, setSynthFallback] = useState(true);
-  const [lowDataMode, setLowDataMode] = useState(false);
+  const [lowDataMode, setLowDataMode] = useState<boolean>(() => {
+    if (typeof currentSettings?.lowDataMode === 'boolean') return currentSettings.lowDataMode;
+    try {
+      return localStorage.getItem('myradiopro_low_data') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [savedToast, setSavedToast] = useState(false);
 
   const [sleepSecondsLeft, setSleepSecondsLeft] = useState(() => audioEngine.getSleepTimerSeconds());
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
 
+  // When modal opens, synchronize state with stored values and engines
   useEffect(() => {
     if (!isOpen) return;
+    setBufferSize(getInitialBufferSize());
+    setDriveCrossfade(getInitialCrossfade());
+    setFadeOutMins(getInitialFadeOut());
+
     const unsubscribe = audioEngine.onSleepTimerChange(secs => {
       setSleepSecondsLeft(secs);
     });
@@ -56,8 +115,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSave = () => {
     try {
-      localStorage.setItem('radiostream_fade_mins', fadeOutMins.toString());
+      // 1. Persist Buffer Size locally and update both audio engines immediately
+      localStorage.setItem('radiostream_buffer_size', bufferSize);
+      audioEngine.setBufferSize(bufferSize);
+      driveAudioEngine.setBufferSize(bufferSize);
+
+      // 2. Persist Drive Crossfade locally and update engine
+      localStorage.setItem('myradiopro_drive_crossfade', String(driveCrossfade));
       driveAudioEngine.setCrossfadeSeconds(driveCrossfade);
+
+      // 3. Persist Fade Out Minutes
+      localStorage.setItem('radiostream_fade_mins', fadeOutMins.toString());
+
+      // 4. Persist Synthesizer and Low Data preferences
+      localStorage.setItem('myradiopro_synth_fallback', String(synthFallback));
+      localStorage.setItem('myradiopro_low_data', String(lowDataMode));
+
+      // 5. Notify parent (App.tsx) to sync settings with Cloud Firestore
+      if (onSaveSettings) {
+        onSaveSettings({
+          bufferSize,
+          driveCrossfade,
+          fadeOutMins,
+          synthFallback,
+          lowDataMode,
+        });
+      }
     } catch {
       // ignore
     }
@@ -65,7 +148,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTimeout(() => {
       setSavedToast(false);
       onClose();
-    }, 900);
+    }, 700);
   };
 
   return (

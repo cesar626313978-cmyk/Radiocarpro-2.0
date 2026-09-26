@@ -28,6 +28,7 @@ import {
   logOutUser,
   onAuthStateChanged,
   saveUserPreferencesToFirestore,
+  saveUserSettingsToFirestore,
   loadUserPreferencesFromFirestore,
   flushPendingPreferencesSave,
   subscribeToUserPreferences,
@@ -68,6 +69,66 @@ export default function App() {
   const [isTeslaPairingModalOpen, setIsTeslaPairingModalOpen] = useState<boolean>(false);
   const [mobilePairCode, setMobilePairCode] = useState<string | null>(null);
   const [lang, setLang] = useState<'ES' | 'EN'>('ES');
+
+  // Synchronized user app settings (Buffer size, Crossfade, Language, etc.)
+  const [userSettings, setUserSettings] = useState(() => {
+    let buf = '128KB';
+    let cf = 0;
+    let fade = 5;
+    let synth = true;
+    let lowData = false;
+    try {
+      const sBuf = localStorage.getItem('radiostream_buffer_size');
+      if (sBuf && ['64KB', '128KB', '256KB', '512KB'].includes(sBuf)) buf = sBuf;
+      const sCf = localStorage.getItem('myradiopro_drive_crossfade');
+      if (sCf) cf = parseInt(sCf, 10);
+      const sFade = localStorage.getItem('radiostream_fade_mins');
+      if (sFade) fade = parseInt(sFade, 10);
+      synth = localStorage.getItem('myradiopro_synth_fallback') !== 'false';
+      lowData = localStorage.getItem('myradiopro_low_data') === 'true';
+    } catch {}
+    return {
+      bufferSize: buf,
+      driveCrossfade: cf,
+      fadeOutMins: fade,
+      synthFallback: synth,
+      lowDataMode: lowData,
+    };
+  });
+
+  const applyRemoteSettings = (remoteSettings: any) => {
+    if (!remoteSettings || typeof remoteSettings !== 'object') return;
+    try {
+      if (remoteSettings.bufferSize && ['64KB', '128KB', '256KB', '512KB'].includes(remoteSettings.bufferSize)) {
+        audioEngine.setBufferSize(remoteSettings.bufferSize);
+        driveAudioEngine.setBufferSize(remoteSettings.bufferSize);
+        localStorage.setItem('radiostream_buffer_size', remoteSettings.bufferSize);
+      }
+      if (typeof remoteSettings.driveCrossfade === 'number') {
+        driveAudioEngine.setCrossfadeSeconds(remoteSettings.driveCrossfade);
+        localStorage.setItem('myradiopro_drive_crossfade', String(remoteSettings.driveCrossfade));
+      }
+      if (typeof remoteSettings.fadeOutMins === 'number') {
+        localStorage.setItem('radiostream_fade_mins', String(remoteSettings.fadeOutMins));
+      }
+      if (typeof remoteSettings.synthFallback === 'boolean') {
+        localStorage.setItem('myradiopro_synth_fallback', String(remoteSettings.synthFallback));
+      }
+      if (typeof remoteSettings.lowDataMode === 'boolean') {
+        localStorage.setItem('myradiopro_low_data', String(remoteSettings.lowDataMode));
+      }
+      if (remoteSettings.lang === 'ES' || remoteSettings.lang === 'EN') {
+        setLang(remoteSettings.lang);
+        localStorage.setItem('radiostream_lang', remoteSettings.lang);
+      }
+      setUserSettings(prev => ({
+        ...prev,
+        ...remoteSettings,
+      }));
+    } catch (e) {
+      console.warn('[Settings] Error aplicando ajustes remotos:', e);
+    }
+  };
 
   // Tuning simulation state
   const [isTuning, setIsTuning] = useState<boolean>(false);
@@ -265,6 +326,11 @@ export default function App() {
       const remoteData = await loadUserPreferencesFromFirestore(userId);
       const remoteFavs = (remoteData && Array.isArray(remoteData.favorites)) ? remoteData.favorites : [];
 
+      // Apply synchronized remote settings across devices
+      if (remoteData?.settings) {
+        applyRemoteSettings(remoteData.settings);
+      }
+
       // Merge local and remote favorites (Union) so no favorites are ever lost across devices
       const mergedFavorites = Array.from(new Set([...localFavs, ...remoteFavs]));
 
@@ -432,6 +498,9 @@ export default function App() {
     const handleIncomingData = (data: any) => {
       if (isInitialUserLoadRef.current) return;
       setIsSyncing(false);
+      if (data && data.settings) {
+        applyRemoteSettings(data.settings);
+      }
       if (data && Array.isArray(data.favorites)) {
         isIncomingUpdateRef.current = true;
         setFavorites(data.favorites);
@@ -503,6 +572,7 @@ export default function App() {
           favorites,
           favoriteStationObjects: favObjects,
           alarms: EMPTY_ALARMS,
+          settings: userSettings,
         }).catch(err => console.warn('Firestore sync direct notice:', err));
       }
 
@@ -510,6 +580,7 @@ export default function App() {
         .savePairedPreferences(syncKey, {
           favorites,
           favoriteStationObjects: favObjects,
+          settings: userSettings,
         })
         .catch(err => console.warn('Tesla paired sync notice:', err));
     }
@@ -1013,6 +1084,34 @@ export default function App() {
         onToggleLang={() => setLang(l => (l === 'ES' ? 'EN' : 'ES'))}
         favoritesCount={favoriteStationObjects.length}
         alarmsCount={0}
+        currentSettings={userSettings}
+        onSaveSettings={async newSettings => {
+          setUserSettings(newSettings);
+          const currentUserId = user?.uid;
+          if (currentUserId) {
+            try {
+              await saveUserSettingsToFirestore(currentUserId, newSettings);
+              await saveUserPreferencesToFirestore(
+                currentUserId,
+                {
+                  favorites,
+                  favoriteStationObjects: Object.values(favoriteStationsMap),
+                  alarms: EMPTY_ALARMS,
+                  settings: newSettings,
+                },
+                true
+              );
+            } catch (err) {
+              console.warn('[Firestore] Error guardando ajustes en la nube:', err);
+            }
+            const syncKey = user.email || currentUserId;
+            teslaPairingService.savePairedPreferences(syncKey, {
+              favorites,
+              favoriteStationObjects: Object.values(favoriteStationsMap),
+              settings: newSettings,
+            }).catch(() => {});
+          }
+        }}
       />
     </div>
   );

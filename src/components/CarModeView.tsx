@@ -7,7 +7,7 @@ import { teslaBackgroundService } from '../services/teslaBackgroundService';
 import { DEFAULT_CAR_TRACKS } from '../constants/carTracks';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { RealisticSpaceCosmos } from './RealisticSpaceCosmos';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 
 interface CarModeViewProps {
   activeSource: 'radio' | 'drive';
@@ -131,16 +131,12 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     }
   }, [allTracks, selectedDemoIndex]);
 
-  // Track reset guard to eliminate reverse-spin visual jump of progress stroke
+  // Track change sync ref
   const prevTrackIdRef = useRef<string | undefined>(activeTrack?.id);
-  const [isResettingProgress, setIsResettingProgress] = useState(false);
 
   useEffect(() => {
     if (activeTrack?.id !== prevTrackIdRef.current) {
       prevTrackIdRef.current = activeTrack?.id;
-      setIsResettingProgress(true);
-      const timer = setTimeout(() => setIsResettingProgress(false), 200);
-      return () => clearTimeout(timer);
     }
   }, [activeTrack?.id]);
 
@@ -594,7 +590,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   strokeDasharray={2 * Math.PI * 95.5}
                   strokeDashoffset={(2 * Math.PI * 95.5) * (1 - progressRatio)}
                   filter="url(#orbNeonGlow)"
-                  className={isResettingProgress ? '' : 'transition-[stroke-dashoffset] duration-150 ease-out'}
+                  className="transition-[stroke-dashoffset] duration-150 ease-out"
                 />
 
                 {/* 3. Ultra-Bright White Specular Core Filament */}
@@ -609,51 +605,49 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   strokeDasharray={2 * Math.PI * 95.5}
                   strokeDashoffset={(2 * Math.PI * 95.5) * (1 - progressRatio)}
                   opacity="0.9"
-                  className={isResettingProgress ? '' : 'transition-[stroke-dashoffset] duration-150 ease-out'}
+                  className="transition-[stroke-dashoffset] duration-150 ease-out"
                 />
               </g>
             ) : null}
 
             {/* LEADING HEAD TRACER: Luminescent jewel bead & flare moving with audio progression */}
-            {!isResettingProgress && progressRatio > 0.005 && (
-              <g>
-                {/* Horizontal Flare beam wing */}
-                <line
-                  x1={headPos.x - 12}
-                  y1={headPos.y}
-                  x2={headPos.x + 12}
-                  y2={headPos.y}
-                  stroke="#ffffff"
-                  strokeWidth="1.2"
-                  opacity="0.8"
-                  filter="url(#headFlareBloom)"
-                />
-                {/* Outer radial glow halo */}
-                <circle
-                  cx={headPos.x}
-                  cy={headPos.y}
-                  r="6.5"
-                  fill={currentView === 'library' ? '#4edea3' : '#38bdf8'}
-                  opacity="0.45"
-                  className={isPlaying ? 'animate-pulse' : ''}
-                />
-                {/* Secondary bright core bead */}
-                <circle
-                  cx={headPos.x}
-                  cy={headPos.y}
-                  r="3.5"
-                  fill={currentView === 'library' ? '#a7f3d0' : '#bae6fd'}
-                  filter="url(#headFlareBloom)"
-                />
-                {/* Intense white center point */}
-                <circle
-                  cx={headPos.x}
-                  cy={headPos.y}
-                  r="1.8"
-                  fill="#ffffff"
-                />
-              </g>
-            )}
+            <g className="transition-opacity duration-300" style={{ opacity: progressRatio > 0.001 ? 1 : 0.25 }}>
+              {/* Horizontal Flare beam wing */}
+              <line
+                x1={headPos.x - 12}
+                y1={headPos.y}
+                x2={headPos.x + 12}
+                y2={headPos.y}
+                stroke="#ffffff"
+                strokeWidth="1.2"
+                opacity="0.8"
+                filter="url(#headFlareBloom)"
+              />
+              {/* Outer radial glow halo */}
+              <circle
+                cx={headPos.x}
+                cy={headPos.y}
+                r="6.5"
+                fill={currentView === 'library' ? '#4edea3' : '#38bdf8'}
+                opacity="0.45"
+                className={isPlaying ? 'animate-pulse' : ''}
+              />
+              {/* Secondary bright core bead */}
+              <circle
+                cx={headPos.x}
+                cy={headPos.y}
+                r="3.5"
+                fill={currentView === 'library' ? '#a7f3d0' : '#bae6fd'}
+                filter="url(#headFlareBloom)"
+              />
+              {/* Intense white center point */}
+              <circle
+                cx={headPos.x}
+                cy={headPos.y}
+                r="1.8"
+                fill="#ffffff"
+              />
+            </g>
           </svg>
 
           {/* Exterior LED Accent Arc Strips (Curved neon light strips on outer perimeter) */}
@@ -790,29 +784,20 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
                 {/* 3. CENTRAL TRACK TITLE, SUBTITLE & VISUALIZER */}
                 <div className="w-full px-2 sm:px-4 max-w-sm sm:max-w-md text-center shrink-0 flex flex-col items-center min-h-[58px] sm:min-h-[72px] justify-center">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={displayTitle}
-                      initial={{ opacity: 0, y: 3 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -3 }}
-                      transition={{ duration: 0.22, ease: 'easeOut' }}
-                      className="w-full flex flex-col items-center"
+                  <div className="w-full flex flex-col items-center transition-all duration-200">
+                    <h1
+                      className="text-base sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] truncate w-full transition-opacity duration-150"
+                      title={displayTitle}
                     >
-                      <h1
-                        className="text-base sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] truncate w-full"
-                        title={displayTitle}
-                      >
-                        {displayTitle}
-                      </h1>
-                      <p
-                        className="text-[11px] sm:text-sm font-semibold text-amber-300 mt-0.5 truncate max-w-full drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]"
-                        title={displaySubtitle}
-                      >
-                        {displaySubtitle}
-                      </p>
-                    </motion.div>
-                  </AnimatePresence>
+                      {displayTitle}
+                    </h1>
+                    <p
+                      className="text-[11px] sm:text-sm font-semibold text-amber-300 mt-0.5 truncate max-w-full drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)] transition-opacity duration-150"
+                      title={displaySubtitle}
+                    >
+                      {displaySubtitle}
+                    </p>
+                  </div>
 
                   {/* Equalizer live audio wave bars when playing or buffering to maintain rock-solid visual stability */}
                   {isPlaying || playbackStatus === 'buffering' ? (
