@@ -51,8 +51,8 @@ class RadioAudioEngine {
     // Listen to global network online/offline and visibility transitions in Tesla
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
-        if (this.shouldBePlaying && this.status !== 'playing') {
-          console.log('[RadioAudioEngine] Conexión recuperada (Online). Reconectando señal de radio...');
+        if (this.shouldBePlaying && this.status === 'error') {
+          console.log('[RadioAudioEngine] Conexión recuperada (Online). Intentando sintonizar nuevamente tras error...');
           this.cancelReconnectTimer();
           this.reconnectAttempts = 0;
           this.executeConnection(true);
@@ -60,10 +60,9 @@ class RadioAudioEngine {
       });
 
       window.addEventListener('offline', () => {
-        if (this.shouldBePlaying && this.status === 'playing') {
-          console.log('[RadioAudioEngine] Red móvil desconectada (Túnel/Sin cobertura). Activando modo espera...');
-          this.setStatus('buffering', 'Sin cobertura (Túnel / Pérdida de señal). Esperando conexión...');
-        }
+        // Let HTML5 audio handle temporary cellular drops using its own internal buffer.
+        // If it genuinely runs out of bytes, onwaiting will transition the UI smoothly.
+        console.log('[RadioAudioEngine] Red móvil desconectada temporalmente en movimiento. Manteniendo reproducción desde búfer...');
       });
 
       // When the driver switches back to the browser from Tesla Maps / Settings / Spotify
@@ -71,8 +70,8 @@ class RadioAudioEngine {
         if (document.visibilityState === 'visible' && this.shouldBePlaying) {
           this.initAudioContext();
           if (this.audio) {
-            if (this.audio.paused || this.status !== 'playing') {
-              console.log('[RadioAudioEngine] Pantalla restaurada en Tesla. Recuperando flujo en segundo plano...');
+            if (this.audio.paused || this.status === 'error') {
+              console.log('[RadioAudioEngine] Pantalla restaurada en Tesla. Recuperando flujo detenido o fallido...');
               this.cancelReconnectTimer();
               this.executeConnection(true);
             }

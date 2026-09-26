@@ -4,7 +4,6 @@ import { DriveAudioFile } from '../types/drive';
 import { driveAudioEngine } from '../services/driveAudioEngine';
 import { googleDriveService } from '../services/googleDriveService';
 import { teslaBackgroundService } from '../services/teslaBackgroundService';
-import { DEFAULT_CAR_TRACKS } from '../constants/carTracks';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { RealisticSpaceCosmos } from './RealisticSpaceCosmos';
 import { DynamicBackground } from './DynamicBackground';
@@ -28,6 +27,8 @@ interface CarModeViewProps {
   onSelectDriveTrack?: (track: DriveAudioFile, index: number) => void;
   activeTheme?: ThemeId;
   onOpenThemes?: () => void;
+  favoriteStations?: RadioStation[];
+  onSelectStation?: (station: RadioStation) => void;
 }
 
 export const CarModeView: React.FC<CarModeViewProps> = ({
@@ -47,6 +48,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   onSelectDriveTrack,
   activeTheme = 'space',
   onOpenThemes,
+  favoriteStations,
+  onSelectStation,
 }) => {
   // Navigation mode: 'player' (Screenshot 1) vs 'library' (Screenshot 2)
   const [currentView, setCurrentView] = useState<'player' | 'library'>('player');
@@ -82,17 +85,17 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   const orbRef = useRef<HTMLDivElement>(null);
   const [selectedDemoIndex, setSelectedDemoIndex] = useState<number>(1); // Index 1 is Neon Supercharger as in screenshot 2!
 
-  // Full unified track list: user's real Drive songs if loaded, otherwise DEFAULT_CAR_TRACKS
+  // Full unified track list: user's real Drive songs if loaded, otherwise empty array
   const allTracks = useMemo<DriveAudioFile[]>(() => {
     if (drivePlaylist && drivePlaylist.length > 0) return drivePlaylist;
     if (enginePlaylist && enginePlaylist.length > 0) return enginePlaylist;
-    return DEFAULT_CAR_TRACKS;
+    return [];
   }, [drivePlaylist, enginePlaylist]);
 
   // Active track determination
-  const activeTrack = useMemo<DriveAudioFile>(() => {
+  const activeTrack = useMemo<DriveAudioFile | null>(() => {
     if (currentDriveTrack) return currentDriveTrack;
-    return allTracks[selectedDemoIndex] || allTracks[0];
+    return allTracks[selectedDemoIndex] || allTracks[0] || null;
   }, [currentDriveTrack, allTracks, selectedDemoIndex]);
 
   // Filtered tracks for Library view search
@@ -106,6 +109,19 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
         (t.album && t.album.toLowerCase().includes(q))
     );
   }, [allTracks, searchQuery]);
+
+  // Filtered stations for search in Library view when activeSource is 'radio'
+  const filteredStations = useMemo<RadioStation[]>(() => {
+    const list = favoriteStations || [];
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(
+      s =>
+        s.name.toLowerCase().includes(q) ||
+        (s.genre && s.genre.toLowerCase().includes(q)) ||
+        (s.country && s.country.toLowerCase().includes(q))
+    );
+  }, [favoriteStations, searchQuery]);
 
   // Keep Drive token status updated
   useEffect(() => {
@@ -431,7 +447,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               color: currentView === 'library' ? '#4edea3' : (THEMES[activeTheme]?.colors.accent || '#00e5ff'),
             }}
           >
-            MODO COCHE HUD • {currentView === 'library' ? 'BIBLIOTECA PISTAS' : 'REPRODUCTOR'}
+            MODO COCHE HUD • {currentView === 'library' ? (activeSource === 'radio' ? 'EMISORAS FAVORITAS' : 'BIBLIOTECA PISTAS') : 'REPRODUCTOR'}
           </span>
         </div>
 
@@ -760,16 +776,16 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       window.location.reload();
                     }
                   }}
-                  className="group relative flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-0.5 sm:py-1.2 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_18px_rgba(245,158,11,0.45)] hover:shadow-[0_0_24px_rgba(245,158,11,0.65)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0"
+                  className="group relative flex items-center justify-between gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-0.8 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_12px_rgba(245,158,11,0.4)] hover:shadow-[0_0_18px_rgba(245,158,11,0.55)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0"
                   title="Conectar o sincronizar Google Drive"
                 >
-                  <div className="flex items-center gap-1.5 text-white font-bold text-[10px] sm:text-xs tracking-wide">
-                    <span className="material-symbols-outlined text-xs sm:text-base text-amber-100">hard_drive</span>
+                  <div className="flex items-center gap-1 text-white font-bold text-[8.5px] sm:text-[10px] tracking-wide">
+                    <span className="material-symbols-outlined text-[10px] sm:text-xs text-amber-100">hard_drive</span>
                     <span>{isDriveConnected ? 'Google Drive' : 'Conectar Drive'}</span>
                   </div>
 
                   <span
-                    className={`text-[8px] sm:text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded-full ${
+                    className={`text-[7px] sm:text-[8px] font-mono font-black uppercase px-1 py-0.2 sm:py-0.5 rounded-full ${
                       isDriveConnected
                         ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-400/50'
                         : 'bg-black/40 text-amber-200 border border-amber-400/40'
@@ -1024,7 +1040,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 </div>
 
                 {/* 7. VOLUME SLIDER POD */}
-                <div className="w-full max-w-[240px] sm:max-w-xs flex items-center justify-between gap-1 sm:gap-2 px-2.5 py-1 rounded-full bg-[#04141f]/90 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0">
+                <div className="w-[74%] max-w-[175px] sm:max-w-[195px] flex items-center justify-between gap-1 sm:gap-1.5 px-2 py-0.5 sm:py-1 rounded-full bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0 mb-1">
                   {/* Speaker Mute/Unmute */}
                   <button
                     type="button"
@@ -1091,20 +1107,37 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   </span>
                 </div>
 
-                {/* 8. BOTTOM "PISTAS (X)" BUTTON */}
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('library')}
-                  className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0"
-                  title="Abrir Biblioteca de Pistas de Audio"
-                >
-                  <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
-                    radio_button_checked
-                  </span>
-                  <span>Pistas ({allTracks.length})</span>
-                </button>
+                {/* 8. BOTTOM "PISTAS (X)" OR "EMISORAS (X)" BUTTON */}
+                {activeSource === 'drive' && isDriveConnected && allTracks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('library')}
+                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0"
+                    title="Abrir Biblioteca de Pistas de Audio"
+                  >
+                    <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
+                      radio_button_checked
+                    </span>
+                    <span>Pistas ({allTracks.length})</span>
+                  </button>
+                )}
+
+                {activeSource === 'radio' && (
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('library')}
+                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0"
+                    title="Ver Emisoras Favoritas"
+                  >
+                    <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
+                      radio
+                    </span>
+                    <span>Emisoras ({(favoriteStations || []).length})</span>
+                  </button>
+                )}
               </motion.div>
             ) : (
+              /* ============================================================== */
               /* ============================================================== */
               /* VIEW 2: BIBLIOTECA (100% MATCH TO SCREENSHOT 2)                */
               /* ============================================================== */
@@ -1116,14 +1149,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 transition={{ duration: 0.25 }}
                 className="relative z-10 w-full h-full flex flex-col items-center justify-between py-2 sm:py-3.5"
               >
-                {/* 1. HEADER: BIBLIOTECA */}
+                {/* 1. HEADER: BIBLIOTECA o EMISORAS */}
                 <div className="w-full text-center shrink-0">
                   <h2 className="text-xs sm:text-sm font-black tracking-[0.25em] text-white uppercase drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]">
-                    BIBLIOTECA
+                    {activeSource === 'radio' ? 'EMISORAS FAVORITAS' : 'BIBLIOTECA'}
                   </h2>
                 </div>
 
-                {/* 2. SEARCH INPUT: Buscar canción o artista... */}
+                {/* 2. SEARCH INPUT */}
                 <div className="w-full max-w-[320px] sm:max-w-sm shrink-0 px-2 mt-1">
                   <div className="relative flex items-center w-full rounded-full bg-black/40 border border-cyan-500/40 hover:border-cyan-400 focus-within:border-cyan-300 px-3.5 py-1.5 transition-all shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)]">
                     <span className="material-symbols-outlined text-base text-cyan-400/80 mr-2">search</span>
@@ -1131,7 +1164,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       type="text"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Buscar canción o artista..."
+                      placeholder={activeSource === 'radio' ? "Buscar emisora favorita..." : "Buscar canción o artista..."}
                       className="w-full bg-transparent text-white text-xs placeholder-gray-400/70 focus:outline-none font-sans"
                     />
                     {searchQuery && (
@@ -1146,52 +1179,120 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   </div>
                 </div>
 
-                {/* 3. TRACKLIST STACK (Custom slim scrollbar on right as in screenshot 2) */}
+                {/* 3. LIST STACK */}
                 <div className="flex-1 w-full max-w-[340px] sm:max-w-[380px] my-1 sm:my-2 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin scrollbar-thumb-cyan-500 scrollbar-track-transparent">
-                  {filteredTracks.map((track, idx) => {
-                    const isSelected = activeTrack?.id === track.id;
-                    const durationStr = formatTime(track.duration || 184);
-                    const cleanName = track.name.replace(/\.(mp3|wav|m4a|flac|aac|ogg)$/i, '');
+                  {activeSource === 'radio' ? (
+                    // Render Radio Stations List
+                    filteredStations.map((station, idx) => {
+                      const isSelected = currentStation?.id === station.id;
 
-                    return (
-                      <div
-                        key={track.id || idx}
-                        onClick={() => handleSelectTrack(track, idx)}
-                        className={`group relative flex items-center justify-between p-2 sm:p-2.5 rounded-xl cursor-pointer transition-all text-left ${
-                          isSelected
-                            ? 'bg-[#062436]/90 border border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]'
-                            : 'bg-[#041421]/60 hover:bg-[#072436]/70 border border-cyan-500/20 hover:border-cyan-500/50'
-                        }`}
-                      >
-                        {/* Left: Number & Track details */}
-                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                          <span className="text-[11px] sm:text-xs font-mono text-gray-400 w-3 text-right shrink-0">
-                            {idx + 1}
-                          </span>
+                      return (
+                        <div
+                          key={station.id || idx}
+                          onClick={() => {
+                            if (onSelectStation) onSelectStation(station);
+                          }}
+                          className={`group relative flex items-center justify-between p-2 sm:p-2.5 rounded-xl cursor-pointer transition-all text-left ${
+                            isSelected
+                              ? 'bg-[#062436]/90 border border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                              : 'bg-[#041421]/60 hover:bg-[#072436]/70 border border-cyan-500/20 hover:border-cyan-500/50'
+                          }`}
+                        >
+                          {/* Left: Logo/Number & details */}
+                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                            {station.logo ? (
+                              <div className="w-6 h-6 rounded bg-black/50 border border-cyan-500/30 flex items-center justify-center shrink-0 overflow-hidden p-0.5">
+                                <img
+                                  src={station.logo}
+                                  alt={station.name}
+                                  className="w-full h-full object-contain"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-[11px] sm:text-xs font-mono text-cyan-400 w-5 text-center shrink-0">
+                                📻
+                              </span>
+                            )}
 
-                          <div className="min-w-0 flex-1">
-                            <h3
-                              className={`text-xs sm:text-sm font-bold tracking-tight truncate ${
-                                isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'
-                              }`}
-                            >
-                              {cleanName}
-                            </h3>
-                            <p className="text-[10px] sm:text-[11px] text-cyan-400 truncate mt-0.5">
-                              {track.artist || 'Google Drive Audio'}
-                            </p>
+                            <div className="min-w-0 flex-1">
+                              <h3
+                                className={`text-xs sm:text-sm font-bold tracking-tight truncate ${
+                                  isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'
+                                }`}
+                              >
+                                {station.name}
+                              </h3>
+                              <p className="text-[10px] sm:text-[11px] text-cyan-400/80 truncate mt-0.5">
+                                {station.genre || 'Sintonía de Radio'}
+                              </p>
+                            </div>
                           </div>
+
+                          {/* Right: Country/Genre */}
+                          <span className="text-[10px] sm:text-xs font-mono text-gray-400 ml-2 shrink-0">
+                            {station.country || 'FM'}
+                          </span>
                         </div>
+                      );
+                    })
+                  ) : (
+                    // Render Google Drive Tracks List
+                    filteredTracks.map((track, idx) => {
+                      const isSelected = activeTrack?.id === track.id;
+                      const durationStr = formatTime(track.duration || 184);
+                      const cleanName = track.name.replace(/\.(mp3|wav|m4a|flac|aac|ogg)$/i, '');
 
-                        {/* Right: Duration */}
-                        <span className="text-[10px] sm:text-xs font-mono text-gray-400 ml-2 shrink-0">
-                          {durationStr}
-                        </span>
-                      </div>
-                    );
-                  })}
+                      return (
+                        <div
+                          key={track.id || idx}
+                          onClick={() => handleSelectTrack(track, idx)}
+                          className={`group relative flex items-center justify-between p-2 sm:p-2.5 rounded-xl cursor-pointer transition-all text-left ${
+                            isSelected
+                              ? 'bg-[#062436]/90 border border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                              : 'bg-[#041421]/60 hover:bg-[#072436]/70 border border-cyan-500/20 hover:border-cyan-500/50'
+                          }`}
+                        >
+                          {/* Left: Number & Track details */}
+                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                            <span className="text-[11px] sm:text-xs font-mono text-gray-400 w-3 text-right shrink-0">
+                              {idx + 1}
+                            </span>
 
-                  {filteredTracks.length === 0 && (
+                            <div className="min-w-0 flex-1">
+                              <h3
+                                className={`text-xs sm:text-sm font-bold tracking-tight truncate ${
+                                  isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'
+                                }`}
+                              >
+                                {cleanName}
+                              </h3>
+                              <p className="text-[10px] sm:text-[11px] text-cyan-400 truncate mt-0.5">
+                                {track.artist || 'Google Drive Audio'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Right: Duration */}
+                          <span className="text-[10px] sm:text-xs font-mono text-gray-400 ml-2 shrink-0">
+                            {durationStr}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {activeSource === 'radio' && filteredStations.length === 0 && (
+                    <div className="py-8 px-4 text-center text-xs text-gray-400">
+                      {favoriteStations && favoriteStations.length > 0
+                        ? `No se encontraron emisoras favoritas para "${searchQuery}"`
+                        : "No tienes emisoras añadidas a favoritas todavía. Agrégalas en la pestaña Descubrir."}
+                    </div>
+                  )}
+
+                  {activeSource !== 'radio' && filteredTracks.length === 0 && (
                     <div className="py-8 text-center text-xs text-gray-400">
                       No se encontraron canciones para "{searchQuery}"
                     </div>

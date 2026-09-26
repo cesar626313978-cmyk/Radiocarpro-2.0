@@ -3,7 +3,6 @@ import { driveCacheService } from './driveCacheService';
 import { driveDownloadManager } from './driveDownloadManager';
 import { googleDriveService } from './googleDriveService';
 import { teslaBackgroundService } from './teslaBackgroundService';
-import { DEFAULT_CAR_TRACKS } from '../constants/carTracks';
 import { AudioNormalizer } from './audioNormalizerNode';
 
 /**
@@ -49,13 +48,13 @@ export class DriveAudioEngine {
 
   private currentTrack: DriveAudioFile | null = null;
   private nextTrack: DriveAudioFile | null = null;
-  private playlist: DriveAudioFile[] = [...DEFAULT_CAR_TRACKS];
-  private currentIndex = 1; // Default to track 2 ("Neon Supercharger")
+  private playlist: DriveAudioFile[] = [];
+  private currentIndex = -1;
 
   private status: DrivePlaybackStatus = 'idle';
   private volume = 0.8;
   private currentTime = 0;
-  private duration = 184;
+  private duration = 0;
   private hasPreloadedNext = false;
   private hasAttemptedRecovery = false;
 

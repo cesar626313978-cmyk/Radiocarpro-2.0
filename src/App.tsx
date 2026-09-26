@@ -730,6 +730,11 @@ export default function App() {
 
   const handleTogglePlay = () => {
     if (activeSource === 'drive') {
+      if (!googleDriveService.hasToken()) {
+        setIsPlaying(false);
+        handleSelectTab('drive');
+        return;
+      }
       if (drivePlaybackStatus === 'playing') {
         driveAudioEngine.pause();
         setIsPlaying(false);
@@ -981,6 +986,10 @@ export default function App() {
           playbackStatus={activeSource === 'drive' ? drivePlaybackStatus : playbackStatus}
           onTogglePlay={() => {
             if (activeSource === 'drive') {
+              if (!googleDriveService.hasToken()) {
+                handleSelectTab('drive');
+                return;
+              }
               if (drivePlaybackStatus === 'playing') {
                 driveAudioEngine.pause();
               } else if (drivePlaybackStatus === 'paused') {
@@ -1032,6 +1041,8 @@ export default function App() {
           }}
           activeTheme={activeTheme}
           onOpenThemes={() => setIsThemeModalOpen(true)}
+          favoriteStations={favoriteStationObjects}
+          onSelectStation={handleTuneToStation}
         />
       )}
 
@@ -1046,6 +1057,10 @@ export default function App() {
         errorMessage={playbackError}
         onTogglePlay={() => {
           if (activeSource === 'drive') {
+            if (!googleDriveService.hasToken()) {
+              handleSelectTab('drive');
+              return;
+            }
             if (drivePlaybackStatus === 'playing') {
               driveAudioEngine.pause();
             } else if (drivePlaybackStatus === 'paused') {
@@ -1132,18 +1147,22 @@ export default function App() {
         activeThemeName={THEMES[activeTheme]?.name}
         currentSettings={userSettings}
         onSaveSettings={async newSettings => {
-          setUserSettings(newSettings);
+          const settingsWithTheme = {
+            ...newSettings,
+            theme: activeTheme,
+          };
+          setUserSettings(settingsWithTheme);
           const currentUserId = user?.uid;
           if (currentUserId) {
             try {
-              await saveUserSettingsToFirestore(currentUserId, newSettings);
+              await saveUserSettingsToFirestore(currentUserId, settingsWithTheme);
               await saveUserPreferencesToFirestore(
                 currentUserId,
                 {
                   favorites,
                   favoriteStationObjects: Object.values(favoriteStationsMap),
                   alarms: EMPTY_ALARMS,
-                  settings: newSettings,
+                  settings: settingsWithTheme,
                 },
                 true
               );
@@ -1154,7 +1173,7 @@ export default function App() {
             teslaPairingService.savePairedPreferences(syncKey, {
               favorites,
               favoriteStationObjects: Object.values(favoriteStationsMap),
-              settings: newSettings,
+              settings: settingsWithTheme,
             }).catch(() => {});
           }
         }}
