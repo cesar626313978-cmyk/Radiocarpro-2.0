@@ -380,16 +380,16 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     try {
       const isCar = isTeslaBrowser();
       if (isCar) {
-        googleDriveService.redirectToOAuth(user?.email);
+        googleDriveService.redirectToOAuth();
         return;
       }
-      await googleDriveService.authenticate(user?.email);
+      await googleDriveService.authenticate();
       setIsAuthenticated(true);
       await loadMusicFolder(undefined, true);
     } catch (err: any) {
       console.warn('Drive popup auth failed, attempting redirect:', err);
       try {
-        googleDriveService.redirectToOAuth(user?.email);
+        googleDriveService.redirectToOAuth();
       } catch (redirErr: any) {
         setErrorMessage(err.message || 'Error al conectar con Google Drive');
       }

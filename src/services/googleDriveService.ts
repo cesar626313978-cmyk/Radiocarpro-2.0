@@ -146,7 +146,7 @@ export class GoogleDriveService {
   /**
    * Direct Full-Window OAuth Redirect (Tesla Browser compatible - avoids broken popup new tabs)
    */
-  public redirectToOAuth(userEmail?: string): void {
+  public redirectToOAuth(): void {
     if (typeof window === 'undefined') return;
     const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId;
     const redirectUri = window.location.origin + window.location.pathname;
@@ -161,13 +161,10 @@ export class GoogleDriveService {
       include_granted_scopes: 'true',
       prompt: 'select_account',
     });
-    if (userEmail) {
-      params.append('login_hint', userEmail);
-    }
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  public authenticate(userEmail?: string): Promise<string> {
+  public authenticate(): Promise<string> {
     return new Promise((resolve, reject) => {
       if (typeof window === 'undefined' || !(window as any).google || !(window as any).google.accounts) {
         reject(new Error('Google Identity Services (GIS) no está disponible en este entorno.'));
@@ -202,11 +199,8 @@ export class GoogleDriveService {
           });
         }
 
-        // Request token (triggers Google popup / consent) with hint if provided
-        const reqOptions: any = { prompt: '' };
-        if (userEmail) {
-          reqOptions.hint = userEmail;
-        }
+        // Request token and always prompt account selection so user can choose existing accounts or add a new one
+        const reqOptions: any = { prompt: 'select_account' };
         this.tokenClient.requestAccessToken(reqOptions);
       } catch (err) {
         reject(err);
