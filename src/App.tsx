@@ -188,9 +188,26 @@ export default function App() {
   useEffect(() => {
     const unsub = googleDriveService.onTokenChange(hasTok => {
       setIsDriveConnected(hasTok);
+      if (hasTok && !user) {
+        googleDriveService.fetchUserInfo().then(info => {
+          if (info && (info.email || info.displayName)) {
+            const recoveredUser = {
+              uid: `paired-${info.email || Date.now()}`,
+              email: info.email || '',
+              displayName: info.displayName || info.email?.split('@')[0] || 'Usuario Coche',
+              photoURL: info.photoURL || '',
+            };
+            try {
+              localStorage.setItem('radiostream_paired_user', JSON.stringify(recoveredUser));
+            } catch {}
+            setUser(recoveredUser);
+            loadUserAccountPreferences(recoveredUser);
+          }
+        });
+      }
     });
     return unsub;
-  }, []);
+  }, [user]);
 
   const pendingFavoriteStationRef = useRef<RadioStation | null>(null);
 
@@ -735,15 +752,32 @@ export default function App() {
         handleSelectTab('drive');
         return;
       }
+      // Stop the opposite engine to ensure complete coexistence
+      audioEngine.cleanupAudio();
+
       if (drivePlaybackStatus === 'playing') {
         driveAudioEngine.pause();
         setIsPlaying(false);
-      } else if (currentDriveTrack) {
-        const token = googleDriveService.getToken();
-        if (token) driveAudioEngine.playTrack(currentDriveTrack, token);
+      } else if (drivePlaybackStatus === 'paused') {
+        driveAudioEngine.resume();
+        setIsPlaying(true);
+      } else {
+        // If idle/stopped, play currentTrack or the first track of the playlist
+        const trackToPlay = currentDriveTrack || driveAudioEngine.getPlaylist()?.[0];
+        if (trackToPlay) {
+          const token = googleDriveService.getToken();
+          if (token) {
+            driveAudioEngine.playTrack(trackToPlay, token);
+            setIsPlaying(true);
+          }
+        }
       }
       return;
     }
+
+    // activeSource === 'radio'
+    // Stop the opposite engine to ensure complete coexistence
+    driveAudioEngine.stopAndDisconnect();
 
     if (isPlaying) {
       audioEngine.stop();
@@ -984,26 +1018,7 @@ export default function App() {
           currentDriveTrack={currentDriveTrack}
           isPlaying={isPlaying}
           playbackStatus={activeSource === 'drive' ? drivePlaybackStatus : playbackStatus}
-          onTogglePlay={() => {
-            if (activeSource === 'drive') {
-              if (!googleDriveService.hasToken()) {
-                handleSelectTab('drive');
-                return;
-              }
-              if (drivePlaybackStatus === 'playing') {
-                driveAudioEngine.pause();
-              } else if (drivePlaybackStatus === 'paused') {
-                driveAudioEngine.resume();
-              } else if (currentDriveTrack) {
-                const token = googleDriveService.getToken();
-                driveAudioEngine.playTrack(currentDriveTrack, token || undefined);
-              } else {
-                driveAudioEngine.resume();
-              }
-            } else {
-              handleTogglePlay();
-            }
-          }}
+          onTogglePlay={handleTogglePlay}
           onNext={() => {
             if (activeSource === 'drive') {
               driveAudioEngine.playNext(true);
@@ -1055,26 +1070,7 @@ export default function App() {
         playbackStatus={playbackStatus}
         drivePlaybackStatus={drivePlaybackStatus}
         errorMessage={playbackError}
-        onTogglePlay={() => {
-          if (activeSource === 'drive') {
-            if (!googleDriveService.hasToken()) {
-              handleSelectTab('drive');
-              return;
-            }
-            if (drivePlaybackStatus === 'playing') {
-              driveAudioEngine.pause();
-            } else if (drivePlaybackStatus === 'paused') {
-              driveAudioEngine.resume();
-            } else if (currentDriveTrack) {
-              const token = googleDriveService.getToken();
-              driveAudioEngine.playTrack(currentDriveTrack, token || undefined);
-            } else {
-              driveAudioEngine.resume();
-            }
-          } else {
-            handleTogglePlay();
-          }
-        }}
+        onTogglePlay={handleTogglePlay}
         onPrevStation={handlePrevStation}
         onNextStation={handleNextStation}
         onDrivePrev={() => driveAudioEngine.playPrev(true)}

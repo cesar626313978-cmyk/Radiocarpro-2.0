@@ -1193,7 +1193,7 @@ export class DriveAudioEngine {
     this.deckA.src = '';
     this.deckB.src = '';
     driveDownloadManager.purgeAllBlobs();
-    this.currentTrack = null;
+    // Keep currentTrack reference so the user can easily play/resume it after switching sources
     this.setStatus('idle');
   }
 

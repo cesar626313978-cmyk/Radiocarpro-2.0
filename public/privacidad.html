@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Política de Privacidad - MyRadio Pro / Audio-Car</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 820px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; background: #fff; }
+    h1 { border-bottom: 2px solid #00E5FF; padding-bottom: 10px; }
+    h2 { margin-top: 25px; color: #0f172a; }
+    .box { background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 5px solid #16a34a; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Política de Privacidad y Tratamiento de Datos</h1>
+  <p><strong>Aplicación:</strong> MyRadio Pro 2.0 (Audio-Car)</p>
+  <p><strong>Dominio Oficial:</strong> <a href="https://www.audio-car.es">https://www.audio-car.es</a></p>
+  <p><strong>Última actualización:</strong> 26 de septiembre de 2026</p>
+
+  <h2>1. Acceso a Google Drive y Permisos Solicitados</h2>
+  <p>MyRadio Pro 2.0 solicita acceso de lectura mediante la API de Google Drive (<code>drive.readonly</code>) con el único fin funcional de listar y reproducir los archivos de audio contenidos dentro de la carpeta designada por el usuario (<code>/mimusica</code>).</p>
+  <ul>
+    <li><strong>Descarga en el Cliente:</strong> Los archivos de audio se solicitan mediante peticiones HTTPS directas entre el navegador web del usuario y los endpoints oficiales de Google APIs utilizando cabeceras Bearer. Ningún archivo binario de audio transita ni se almacena en servidores intermedios ajenos a Google.</li>
+    <li><strong>No Modificación:</strong> La aplicación carece de permisos para editar, renombrar, eliminar o subir archivos a la unidad del usuario.</li>
+  </ul>
+
+  <h2>2. Almacenamiento Local (IndexedDB y Cache)</h2>
+  <p>Para garantizar una reproducción fluida en movilidad (evitando cortes en zonas sin cobertura o túneles), la aplicación utiliza almacenamiento local en el navegador del dispositivo (IndexedDB / RAM) bajo estrictas salvaguardas de memoria:</p>
+  <ul>
+    <li>Los fragmentos de audio en memoria se gestionan como Blob URLs temporales (máximo 2 concurrentes) y se liberan de forma determinista mediante <code>URL.revokeObjectURL()</code>.</li>
+    <li>La base de datos local puede ser vaciada por el usuario en cualquier momento desde la interfaz cerrando sesión.</li>
+  </ul>
+
+  <div class="box">
+    <h2>3. Declaración de Cumplimiento de la Política de Datos de Usuario de Google</h2>
+    <p>El uso y la transferencia que hace <strong>MyRadio Pro 2.0</strong> a cualquier otra aplicación de la información recibida a través de las APIs de Google se apegará estrictamente a la <strong><a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Política de Datos de Usuario de los Servicios de las APIs de Google (Google API Services User Data Policy)</a></strong>, incluidos los requisitos de <strong>Uso Limitado (Limited Use requirements)</strong>.</p>
+  </div>
+
+  <h2>4. Sincronización en la Nube (Firebase)</h2>
+  <p>La sincronización multi-dispositivo y modo coche almacena de forma segura en Firebase Firestore únicamente el identificador anonimizado de usuario, el correo electrónico y la lista de emisoras de radio o carpetas favoritas configuradas. En ningún caso se solicitan contraseñas ni información de pago.</p>
+
+  <h2>5. Revocación de Consentimiento</h2>
+  <p>El usuario puede revocar el acceso de MyRadio Pro 2.0 en cualquier momento a través del panel oficial de seguridad de Google en: <br>
+  <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">https://myaccount.google.com/permissions</a>.</p>
+</body>
+</html>
