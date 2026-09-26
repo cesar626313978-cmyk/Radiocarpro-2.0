@@ -23,11 +23,23 @@ import { Alarm, RadioStation } from '../types/radio';
 export { onAuthStateChanged };
 export type { User };
 
+// Resolve config prioritizing environment variables (for Vercel/production deployment) with fallback to local config
+export const activeFirebaseConfig = {
+  projectId: (import.meta.env.VITE_FIREBASE_PROJECT_ID as string) || firebaseConfig.projectId,
+  appId: (import.meta.env.VITE_FIREBASE_APP_ID as string) || firebaseConfig.appId,
+  apiKey: (import.meta.env.VITE_FIREBASE_API_KEY as string) || firebaseConfig.apiKey,
+  authDomain: (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string) || firebaseConfig.authDomain,
+  firestoreDatabaseId: (import.meta.env.VITE_FIREBASE_DATABASE_ID as string) || firebaseConfig.firestoreDatabaseId,
+  storageBucket: (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string) || firebaseConfig.storageBucket,
+  messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || firebaseConfig.messagingSenderId,
+  oAuthClientId: (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId,
+};
+
 // Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+const app = initializeApp(activeFirebaseConfig);
 
 // Initialize Firestore with specific database ID
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, activeFirebaseConfig.firestoreDatabaseId);
 
 // Test Firestore connection on boot (Firebase integration requirement)
 async function testConnection() {

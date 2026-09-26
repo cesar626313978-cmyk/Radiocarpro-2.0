@@ -403,6 +403,16 @@ class RadioAudioEngine {
     this.setStatus('idle');
   }
 
+  /**
+   * Conmutación Limpia de Fuentes:
+   * Detiene y desengancha completamente el stream de radio en vivo
+   * antes de activar la pletina de Google Drive.
+   */
+  public cleanupAudio(): void {
+    this.stop();
+    console.log('[RadioAudioEngine] cleanupAudio: Stream de radio detenido y desenganchado.');
+  }
+
   public pause() {
     this.shouldBePlaying = false;
     this.clearConnectionTimeout();

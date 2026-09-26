@@ -41,7 +41,7 @@ self.addEventListener('fetch', (event) => {
   
   const url = new URL(event.request.url);
 
-  // Bypass cache for live audio stream URLs and chunks
+  // Bypass cache for live audio stream URLs, chunks, Google Drive media, and Cloud APIs
   if (
     url.pathname.endsWith('.mp3') ||
     url.pathname.endsWith('.aac') ||
@@ -52,7 +52,11 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('radio') ||
     url.hostname.includes('zeno.fm') ||
     url.hostname.includes('somafm.com') ||
-    url.hostname.includes('flumotion.com')
+    url.hostname.includes('flumotion.com') ||
+    url.hostname.includes('googleapis.com') ||
+    url.hostname.includes('googleusercontent.com') ||
+    url.hostname.includes('google.com') ||
+    url.hostname.includes('firebaseio.com')
   ) {
     return;
   }

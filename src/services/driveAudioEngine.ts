@@ -153,6 +153,7 @@ export class DriveAudioEngine {
    */
   public initAudioGraph(): void {
     if (this.ctx) {
+      this.connectNodes();
       if (this.ctx.state === 'suspended') {
         this.ctx.resume().catch(() => {});
       }
@@ -189,11 +190,7 @@ export class DriveAudioEngine {
       this.analyserNode.fftSize = 64;
 
       // Enrutamiento de efectos a destino
-      this.eqLow.connect(this.eqMid);
-      this.eqMid.connect(this.eqHigh);
-      this.eqHigh.connect(this.masterGain);
-      this.masterGain.connect(this.analyserNode);
-      this.analyserNode.connect(this.ctx.destination);
+      this.connectNodes();
 
       // Conexión Pletina A
       this.sourceA = this.ctx.createMediaElementSource(this.deckA);
@@ -214,6 +211,38 @@ export class DriveAudioEngine {
 
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
+    }
+  }
+
+  public connectNodes(): void {
+    if (!this.ctx || !this.masterGain || !this.eqLow || !this.eqMid || !this.eqHigh || !this.analyserNode) return;
+    try {
+      this.eqLow.disconnect();
+      this.eqMid.disconnect();
+      this.eqHigh.disconnect();
+      this.masterGain.disconnect();
+      this.analyserNode.disconnect();
+
+      this.eqLow.connect(this.eqMid);
+      this.eqMid.connect(this.eqHigh);
+      this.eqHigh.connect(this.masterGain);
+      this.masterGain.connect(this.analyserNode);
+      this.analyserNode.connect(this.ctx.destination);
+
+      if (this.sourceA && this.gainA) {
+        this.sourceA.disconnect();
+        this.gainA.disconnect();
+        this.sourceA.connect(this.gainA);
+        this.gainA.connect(this.eqLow);
+      }
+      if (this.sourceB && this.gainB) {
+        this.sourceB.disconnect();
+        this.gainB.disconnect();
+        this.sourceB.connect(this.gainB);
+        this.gainB.connect(this.eqLow);
+      }
+    } catch (err) {
+      console.warn('[DriveAudioEngine] Reconnect warning:', err);
     }
   }
 
@@ -1119,6 +1148,20 @@ export class DriveAudioEngine {
     driveDownloadManager.purgeAllBlobs();
     this.currentTrack = null;
     this.setStatus('idle');
+  }
+
+  /**
+   * Conmutación Limpia de Fuentes:
+   * Detiene reproducción, purga todos los Blob URLs de memoria RAM,
+   * y desconecta formalmente las pletinas y el grafo Web Audio para liberar hardware al cambiar a Radio.
+   */
+  public stopAndDisconnect(): void {
+    this.stop();
+    this.disconnectNodes();
+    if (this.ctx && this.ctx.state === 'running') {
+      this.ctx.suspend().catch(() => {});
+    }
+    console.log('[DriveAudioEngine] stopAndDisconnect: Pletinas y Web Audio liberados limpiamente.');
   }
 
   public seek(seconds: number) {

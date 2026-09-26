@@ -148,7 +148,7 @@ export class GoogleDriveService {
    */
   public redirectToOAuth(userEmail?: string): void {
     if (typeof window === 'undefined') return;
-    const clientId = firebaseConfig.oAuthClientId;
+    const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId;
     const redirectUri = window.location.origin + window.location.pathname;
     try {
       localStorage.setItem('radiostream_redirect_initiated', 'true');
@@ -174,9 +174,9 @@ export class GoogleDriveService {
         return;
       }
 
-      const clientId = firebaseConfig.oAuthClientId;
+      const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId;
       if (!clientId) {
-        reject(new Error('oAuthClientId no encontrado en la configuración de Firebase.'));
+        reject(new Error('oAuthClientId no encontrado en la configuración.'));
         return;
       }
 

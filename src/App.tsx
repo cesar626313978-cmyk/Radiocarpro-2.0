@@ -678,7 +678,7 @@ export default function App() {
       }, 700);
     }
 
-    driveAudioEngine.stop();
+    driveAudioEngine.stopAndDisconnect();
     setActiveSource('radio');
     audioEngine.updateMediaMetadata(station);
     audioEngine.playStream(station.streamUrl);
@@ -920,7 +920,7 @@ export default function App() {
               onSwitchToRadio={() => handleSelectTab('descubrir')}
               activeSource={activeSource}
               onActivateDriveSource={() => {
-                audioEngine.stop();
+                audioEngine.cleanupAudio();
                 setIsPlaying(false);
                 setActiveSource('drive');
               }}
@@ -980,6 +980,8 @@ export default function App() {
             handleSelectTab('drive');
           }}
           onSelectDriveTrack={(track, index) => {
+            audioEngine.cleanupAudio();
+            setIsPlaying(false);
             setActiveSource('drive');
             const token = googleDriveService.getToken();
             const playlist = driveAudioEngine.getPlaylist();
