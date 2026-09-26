@@ -6,12 +6,16 @@ interface SideNavProps {
   onSelectTab: (tab: TabType) => void;
   favoritesCount: number;
   alarmsCount?: number;
+  onOpenThemes?: () => void;
+  activeThemeName?: string;
 }
 
 export const SideNav: React.FC<SideNavProps> = ({
   currentTab,
   onSelectTab,
   favoritesCount,
+  onOpenThemes,
+  activeThemeName,
 }) => {
   const navItems: { id: TabType; label: string; icon: string; badge?: number }[] = [
     { id: 'descubrir', label: 'RADIO', icon: 'radio' },
@@ -67,6 +71,38 @@ export const SideNav: React.FC<SideNavProps> = ({
             </button>
           );
         })}
+
+        {/* Dynamic Biomes & Themes Option */}
+        {onOpenThemes && (
+          <button
+            type="button"
+            onClick={onOpenThemes}
+            className="flex items-center justify-between p-3 xl:p-3.5 border-3 border-black font-mono-tech text-xs xl:text-sm font-bold text-left uppercase transition-all duration-100 w-full cursor-pointer bg-[#18181c] text-white hover:bg-[#23232b] hover:translate-x-0.5 mt-2 group shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+            title="Cambiar tema visual y bioma interactivo de fondo"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <span
+                className="material-symbols-outlined text-xl shrink-0 group-hover:rotate-12 transition-transform"
+                style={{ color: 'var(--color-accent, #00e5ff)' }}
+              >
+                palette
+              </span>
+              <span className="truncate">TEMAS</span>
+            </div>
+            {activeThemeName && (
+              <span
+                className="text-[9px] px-1.5 py-0.5 border border-black font-mono-tech uppercase font-bold shrink-0 ml-1.5 truncate max-w-[80px]"
+                style={{
+                  backgroundColor: 'var(--color-hud-center, #081326)',
+                  color: 'var(--color-accent, #00e5ff)',
+                  borderColor: 'var(--color-hud-border, rgba(0,229,255,0.4))',
+                }}
+              >
+                {activeThemeName}
+              </span>
+            )}
+          </button>
+        )}
       </nav>
 
       {/* System Status Pill */}

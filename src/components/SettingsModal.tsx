@@ -10,6 +10,8 @@ interface SettingsModalProps {
   onToggleLang: () => void;
   favoritesCount: number;
   alarmsCount: number;
+  onOpenThemes?: () => void;
+  activeThemeName?: string;
   onSaveSettings?: (settings: {
     bufferSize: string;
     driveCrossfade: number;
@@ -33,6 +35,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleLang,
   favoritesCount,
   alarmsCount,
+  onOpenThemes,
+  activeThemeName,
   onSaveSettings,
   currentSettings,
 }) => {
@@ -173,6 +177,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Settings Sections */}
         <div className="flex flex-col gap-4">
+          {/* Biomas y Temas Dinámicos */}
+          {onOpenThemes && (
+            <div className="bg-[#131313] p-3.5 border-2 border-black flex items-center justify-between gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="material-symbols-outlined text-lg"
+                    style={{ color: 'var(--color-accent, #00e5ff)' }}
+                  >
+                    palette
+                  </span>
+                  <span className="font-mono-tech text-xs text-white font-bold uppercase">
+                    Tema Visual y Bioma Dinámico
+                  </span>
+                </div>
+                <p className="font-mono-tech text-[10px] text-[#bbcabf]">
+                  Tema activo: <span className="font-bold text-white" style={{ color: 'var(--color-accent, #00e5ff)' }}>{activeThemeName || 'Espacio Exterior'}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenThemes();
+                }}
+                className="neo-button border-2 border-black px-3 py-1.5 font-mono-tech text-xs font-bold uppercase shrink-0 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
+                style={{
+                  backgroundColor: 'var(--color-hud-center, #081326)',
+                  color: 'var(--color-accent, #00e5ff)',
+                }}
+              >
+                Cambiar Bioma
+              </button>
+            </div>
+          )}
+
           {/* Buffer Size */}
           <div className="bg-[#131313] p-3.5 border-2 border-black flex flex-col gap-2">
             <div className="flex justify-between items-center">

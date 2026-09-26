@@ -13,6 +13,10 @@ import { TuningModal } from './components/TuningModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ShaderBackground } from './components/ShaderBackground';
 import { RealisticSpaceCosmos } from './components/RealisticSpaceCosmos';
+import { DynamicBackground } from './components/DynamicBackground';
+import { ThemeSelectorModal } from './components/ThemeSelectorModal';
+import { ThemeId, THEMES } from './types/theme';
+import { ThemeService } from './services/themeService';
 import { CarModeView } from './components/CarModeView';
 import { TeslaPairingModal } from './components/TeslaPairingModal';
 import { MobilePairingView } from './components/MobilePairingView';
@@ -70,6 +74,26 @@ export default function App() {
   const [mobilePairCode, setMobilePairCode] = useState<string | null>(null);
   const [lang, setLang] = useState<'ES' | 'EN'>('ES');
 
+  // Dynamic Biomes & Visual Thematization state
+  const [activeTheme, setActiveTheme] = useState<ThemeId>(ThemeService.getInitialTheme);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    ThemeService.applyTheme(activeTheme);
+  }, [activeTheme]);
+
+  const handleSelectTheme = (newTheme: ThemeId) => {
+    setActiveTheme(newTheme);
+    ThemeService.applyTheme(newTheme);
+    const currentUserId = user?.uid;
+    if (currentUserId) {
+      saveUserSettingsToFirestore(currentUserId, {
+        ...userSettings,
+        theme: newTheme,
+      }).catch(() => {});
+    }
+  };
+
   // Synchronized user app settings (Buffer size, Crossfade, Language, etc.)
   const [userSettings, setUserSettings] = useState(() => {
     let buf = '128KB';
@@ -120,6 +144,10 @@ export default function App() {
       if (remoteSettings.lang === 'ES' || remoteSettings.lang === 'EN') {
         setLang(remoteSettings.lang);
         localStorage.setItem('radiostream_lang', remoteSettings.lang);
+      }
+      if (remoteSettings.theme && THEMES[remoteSettings.theme as ThemeId]) {
+        setActiveTheme(remoteSettings.theme as ThemeId);
+        ThemeService.applyTheme(remoteSettings.theme as ThemeId);
       }
       setUserSettings(prev => ({
         ...prev,
@@ -851,18 +879,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#131313] text-[#e5e2e1] flex flex-col font-['Inter'] relative selection:bg-[#8B5CF6] selection:text-white">
-      {/* Clean Subtle Background */}
-      <ShaderBackground />
-      {/* Realistic Space Cosmos (comets, moons, planets, rockets, space stations, UFOs) */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-55">
-        <RealisticSpaceCosmos />
-      </div>
+      {/* Dynamic Interactive Biome Canvas (Space, Ocean, Lunar, Canyon, Savanna, Jungle) */}
+      <DynamicBackground activeTheme={activeTheme} />
+      {/* Realistic Space Cosmos with space stations, comets, rockets when in space theme */}
+      {activeTheme === 'space' && (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-50">
+          <RealisticSpaceCosmos />
+        </div>
+      )}
 
       {/* Top App Bar with Google Login / Logout & Live API Badge */}
       <TopAppBar
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenThemes={() => setIsThemeModalOpen(true)}
         lang={lang}
         onToggleLang={() => setLang(l => (l === 'ES' ? 'EN' : 'ES'))}
         user={user}
@@ -879,6 +910,8 @@ export default function App() {
           currentTab={currentTab}
           onSelectTab={handleSelectTab}
           favoritesCount={favoriteStationObjects.length}
+          onOpenThemes={() => setIsThemeModalOpen(true)}
+          activeThemeName={THEMES[activeTheme]?.name}
         />
 
         {/* Main Content Area - Views stay persistent in DOM to prevent reload/waiting */}
@@ -990,6 +1023,8 @@ export default function App() {
             }
             driveAudioEngine.playTrack(track, token || undefined);
           }}
+          activeTheme={activeTheme}
+          onOpenThemes={() => setIsThemeModalOpen(true)}
         />
       )}
 
@@ -1086,6 +1121,8 @@ export default function App() {
         onToggleLang={() => setLang(l => (l === 'ES' ? 'EN' : 'ES'))}
         favoritesCount={favoriteStationObjects.length}
         alarmsCount={0}
+        onOpenThemes={() => setIsThemeModalOpen(true)}
+        activeThemeName={THEMES[activeTheme]?.name}
         currentSettings={userSettings}
         onSaveSettings={async newSettings => {
           setUserSettings(newSettings);
@@ -1114,6 +1151,14 @@ export default function App() {
             }).catch(() => {});
           }
         }}
+      />
+
+      {/* Dynamic Theme & Biome Selector Modal */}
+      <ThemeSelectorModal
+        isOpen={isThemeModalOpen}
+        activeTheme={activeTheme}
+        onSelectTheme={handleSelectTheme}
+        onClose={() => setIsThemeModalOpen(false)}
       />
     </div>
   );

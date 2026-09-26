@@ -6,6 +6,7 @@ interface TopAppBarProps {
   currentTab: TabType;
   onSelectTab: (tab: TabType) => void;
   onOpenSettings: () => void;
+  onOpenThemes?: () => void;
   lang: 'ES' | 'EN';
   onToggleLang: () => void;
   user: User | null;
@@ -20,6 +21,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   currentTab,
   onSelectTab,
   onOpenSettings,
+  onOpenThemes,
   user,
   onLoginWithGoogle,
   onLogout,
@@ -232,7 +234,24 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
             </div>
           )}
 
-          {/* 3. Settings Button (Rueda dentada, safely placed and sized) */}
+          {/* 3. Themes Button (Biomas & Fondos) */}
+          {onOpenThemes && (
+            <button
+              onClick={onOpenThemes}
+              className="w-8 h-8 sm:w-9 sm:h-9 bg-[#201f1f] text-white border-2 border-black hover:bg-[#353534] transition-colors cursor-pointer flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 shrink-0 group"
+              title="Temas visuales y biomas dinámicos (Espacio, Fondo Marino, Lunar, Cañón, Sabana, Selva)"
+              aria-label="Temas"
+            >
+              <span
+                className="material-symbols-outlined text-base sm:text-lg group-hover:rotate-12 transition-transform"
+                style={{ color: 'var(--color-accent, #00e5ff)' }}
+              >
+                palette
+              </span>
+            </button>
+          )}
+
+          {/* 4. Settings Button (Rueda dentada, safely placed and sized) */}
           <button
             onClick={onOpenSettings}
             className="w-8 h-8 sm:w-9 sm:h-9 bg-[#201f1f] text-white border-2 border-black hover:bg-[#353534] transition-colors cursor-pointer flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 shrink-0"
@@ -242,7 +261,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
             <span className="material-symbols-outlined text-base sm:text-lg">settings</span>
           </button>
 
-          {/* 4. Fullscreen Toggle Button */}
+          {/* 5. Fullscreen Toggle Button */}
           <button
             type="button"
             onClick={handleToggleFullscreen}

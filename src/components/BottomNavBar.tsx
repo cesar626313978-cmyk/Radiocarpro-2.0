@@ -24,9 +24,17 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentTab, onSelect
             onClick={() => onSelectTab(tab.id)}
             className={`flex flex-col items-center justify-center pt-1.5 pb-1 flex-1 transition-all relative ${
               isActive
-                ? 'text-[#8B5CF6] border-t-3 border-[#8B5CF6] -mt-[3px] font-bold'
+                ? 'border-t-3 -mt-[3px] font-bold'
                 : 'text-[#bbcabf] hover:text-white'
             }`}
+            style={
+              isActive
+                ? {
+                    color: 'var(--color-accent, #4edea3)',
+                    borderColor: 'var(--color-accent, #4edea3)',
+                  }
+                : {}
+            }
           >
             <span
               className="material-symbols-outlined text-2xl mb-0.5"

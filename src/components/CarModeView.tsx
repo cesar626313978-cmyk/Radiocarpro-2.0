@@ -7,6 +7,8 @@ import { teslaBackgroundService } from '../services/teslaBackgroundService';
 import { DEFAULT_CAR_TRACKS } from '../constants/carTracks';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { RealisticSpaceCosmos } from './RealisticSpaceCosmos';
+import { DynamicBackground } from './DynamicBackground';
+import { ThemeId, THEMES } from '../types/theme';
 import { motion } from 'motion/react';
 
 interface CarModeViewProps {
@@ -24,6 +26,8 @@ interface CarModeViewProps {
   onConnectDrive?: () => void;
   drivePlaylist?: DriveAudioFile[];
   onSelectDriveTrack?: (track: DriveAudioFile, index: number) => void;
+  activeTheme?: ThemeId;
+  onOpenThemes?: () => void;
 }
 
 export const CarModeView: React.FC<CarModeViewProps> = ({
@@ -41,6 +45,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   onConnectDrive,
   drivePlaylist,
   onSelectDriveTrack,
+  activeTheme = 'space',
+  onOpenThemes,
 }) => {
   // Navigation mode: 'player' (Screenshot 1) vs 'library' (Screenshot 2)
   const [currentView, setCurrentView] = useState<'player' | 'library'>('player');
@@ -402,19 +408,52 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
       {/* Privacy Policy Modal */}
       <PrivacyPolicyModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
 
-      {/* Deep Realistic Space Cosmos Background (Planets, Moon, Comets, Rockets, Stations, UFOs) */}
-      <RealisticSpaceCosmos />
+      {/* Dynamic Interactive Biome Canvas (Space, Ocean, Lunar, Canyon, Savanna, Jungle) */}
+      <DynamicBackground activeTheme={activeTheme} />
+      {activeTheme === 'space' && (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-60">
+          <RealisticSpaceCosmos />
+        </div>
+      )}
 
       {/* Top Floating Controls Bar: Fullscreen & Exit Car Mode */}
       <div className="absolute top-3 left-4 right-4 z-40 flex items-center justify-between pointer-events-auto">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${currentView === 'library' ? 'bg-[#4edea3]' : 'bg-cyan-400'} animate-pulse`} />
-          <span className="text-[10px] sm:text-xs font-mono font-bold tracking-widest text-cyan-300/80 uppercase">
+          <div
+            className="w-2 h-2 rounded-full animate-pulse"
+            style={{
+              backgroundColor: currentView === 'library' ? '#4edea3' : (THEMES[activeTheme]?.colors.accent || '#00e5ff'),
+            }}
+          />
+          <span
+            className="text-[10px] sm:text-xs font-mono font-bold tracking-widest uppercase"
+            style={{
+              color: currentView === 'library' ? '#4edea3' : (THEMES[activeTheme]?.colors.accent || '#00e5ff'),
+            }}
+          >
             MODO COCHE HUD • {currentView === 'library' ? 'BIBLIOTECA PISTAS' : 'REPRODUCTOR'}
           </span>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Themes Switcher */}
+          {onOpenThemes && (
+            <button
+              type="button"
+              onClick={onOpenThemes}
+              className="px-2.5 sm:px-3 py-1 rounded-full bg-white/5 hover:bg-white/15 border border-white/20 text-white font-mono text-[10px] sm:text-xs uppercase tracking-wider flex items-center gap-1 cursor-pointer backdrop-blur-md transition-all group"
+              title="Cambiar tema visual y bioma de fondo"
+            >
+              <span
+                className="material-symbols-outlined text-sm sm:text-base group-hover:rotate-12 transition-transform"
+                style={{ color: THEMES[activeTheme]?.colors.accent || '#38bdf8' }}
+              >
+                palette
+              </span>
+              <span className="hidden sm:inline">TEMAS</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleToggleFullscreen}
@@ -471,13 +510,15 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
             } blur-[1px]`}
           />
 
-          {/* Outer Ring 2: Solid Neon Border (Cyan/Blue in Player, Emerald Green in Library) */}
+          {/* Outer Ring 2: Solid Neon Border (Theme Accent in Player, Emerald Green in Library) */}
           <div
-            className={`absolute inset-0 rounded-full border-2 pointer-events-none transition-all duration-500 ${
-              currentView === 'library'
-                ? 'border-[#4edea3] shadow-[inset_0_0_20px_rgba(78,222,163,0.3)]'
-                : 'border-[#38bdf8] shadow-[inset_0_0_20px_rgba(56,189,248,0.25)]'
-            }`}
+            className="absolute inset-0 rounded-full border-2 pointer-events-none transition-all duration-500"
+            style={{
+              borderColor: currentView === 'library' ? '#4edea3' : (THEMES[activeTheme]?.colors.accent || '#38bdf8'),
+              boxShadow: currentView === 'library'
+                ? 'inset 0 0 20px rgba(78,222,163,0.3)'
+                : `inset 0 0 20px ${THEMES[activeTheme]?.colors.glow || 'rgba(56,189,248,0.25)'}`,
+            }}
           />
 
           {/* Outer Ring 3: Dynamic Audio Progression & Cockpit Chronograph SVG Ring */}
@@ -486,12 +527,12 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
             viewBox="0 0 200 200"
           >
             <defs>
-              {/* Cyan to Violet electric gradient for player mode */}
+              {/* Electric gradient for player mode tinted to active theme */}
               <linearGradient id="orbProgressGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#00f5ff" />
-                <stop offset="35%" stopColor="#38bdf8" />
-                <stop offset="70%" stopColor="#818cf8" />
-                <stop offset="100%" stopColor="#c084fc" />
+                <stop offset="0%" stopColor={THEMES[activeTheme]?.colors.accent || "#00f5ff"} />
+                <stop offset="45%" stopColor={THEMES[activeTheme]?.colors.accent || "#38bdf8"} />
+                <stop offset="75%" stopColor={THEMES[activeTheme]?.colors.textSecondary || "#818cf8"} />
+                <stop offset="100%" stopColor="#ffffff" />
               </linearGradient>
 
               {/* Emerald gradient for library mode */}
