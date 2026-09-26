@@ -151,7 +151,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             type="button"
             onClick={onInstallPWA}
             className="neo-button bg-[#4edea3] hover:bg-[#38c98e] text-[#003824] px-2.5 py-1 text-[10px] font-mono-tech font-black uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
-            title="Instalar Myradio en la pantalla de inicio"
+            title="Instalar Myradio Pro 2.0 en la pantalla de inicio"
           >
             <span className="material-symbols-outlined text-xs">download</span>
             <span>Instalar PWA</span>

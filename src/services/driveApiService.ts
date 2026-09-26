@@ -1,7 +1,7 @@
 /**
  * driveApiService.ts
  * Servicio directo para la conexión e indexación de archivos de Google Drive
- * Búsqueda de carpeta /mimusica y listado de archivos de audio para Myradio 2.0 Pro.
+ * Búsqueda de carpeta /mimusica y listado de archivos de audio para Myradio Pro 2.0.
  */
 
 export async function findOrCreateMusicFolder(accessToken: string): Promise<string> {

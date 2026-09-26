@@ -30,7 +30,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                   Política de Privacidad y Seguridad
                 </h2>
                 <p className="text-[10px] sm:text-xs text-cyan-400/80 font-mono">
-                  Myradio 2.0 Pro • Modo Coche y Streaming
+                  Myradio Pro 2.0 • Modo Coche y Streaming
                 </p>
               </div>
             </div>

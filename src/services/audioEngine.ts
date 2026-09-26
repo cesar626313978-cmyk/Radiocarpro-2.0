@@ -532,7 +532,7 @@ class RadioAudioEngine {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: station.name,
         artist: station.genre ? `${station.genre} • En Directo` : 'En Directo',
-        album: station.country || 'Myradio PWA',
+        album: station.country || 'Myradio Pro 2.0',
         artwork: [
           { src: station.logoUrl || '/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },

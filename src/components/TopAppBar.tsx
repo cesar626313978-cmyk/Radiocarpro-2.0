@@ -79,7 +79,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="font-black text-xl tracking-tighter text-white uppercase font-['Inter']">
-              Myradio 1.0 Pro
+              Myradio Pro 2.0
             </span>
             <span className="bg-[#8B5CF6] text-white text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black uppercase hidden sm:inline-block">
               LIVE

@@ -18,6 +18,7 @@ interface SettingsModalProps {
     fadeOutMins: number;
     synthFallback: boolean;
     lowDataMode: boolean;
+    dynamicNormalizer: boolean;
   }) => void;
   currentSettings?: {
     bufferSize?: string;
@@ -25,6 +26,7 @@ interface SettingsModalProps {
     fadeOutMins?: number;
     synthFallback?: boolean;
     lowDataMode?: boolean;
+    dynamicNormalizer?: boolean;
   };
 }
 
@@ -90,6 +92,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       return false;
     }
   });
+  const [dynamicNormalizer, setDynamicNormalizer] = useState<boolean>(() => {
+    if (typeof currentSettings?.dynamicNormalizer === 'boolean') return currentSettings.dynamicNormalizer;
+    try {
+      return localStorage.getItem('myradiopro_dynamic_normalizer') !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const [savedToast, setSavedToast] = useState(false);
 
   const [sleepSecondsLeft, setSleepSecondsLeft] = useState(() => audioEngine.getSleepTimerSeconds());
@@ -131,9 +141,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       // 3. Persist Fade Out Minutes
       localStorage.setItem('radiostream_fade_mins', fadeOutMins.toString());
 
-      // 4. Persist Synthesizer and Low Data preferences
+      // 4. Persist Synthesizer, Low Data and Dynamic Normalizer preferences
       localStorage.setItem('myradiopro_synth_fallback', String(synthFallback));
       localStorage.setItem('myradiopro_low_data', String(lowDataMode));
+      localStorage.setItem('myradiopro_dynamic_normalizer', String(dynamicNormalizer));
+      driveAudioEngine.setVolumeNormalization(dynamicNormalizer);
 
       // 5. Notify parent (App.tsx) to sync settings with Cloud Firestore
       if (onSaveSettings) {
@@ -143,6 +155,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           fadeOutMins,
           synthFallback,
           lowDataMode,
+          dynamicNormalizer,
         });
       }
     } catch {
@@ -163,7 +176,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#4edea3] text-2xl">settings</span>
             <h2 className="font-black text-xl text-white uppercase font-['Inter']">
-              Ajustes de Myradio 1.0 Pro
+              Ajustes de Myradio Pro 2.0
             </h2>
           </div>
           <button
@@ -377,6 +390,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 );
               })}
             </div>
+          </div>
+
+          {/* Normalizador de Dinámica (AGC) */}
+          <div className="bg-[#131313] p-3.5 border-2 border-black flex justify-between items-center">
+            <div className="flex-1 pr-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#4edea3] text-base">tune</span>
+                <span className="font-mono-tech text-xs text-white font-bold uppercase">
+                  Normalizador de Dinámica (AGC en Tiempo Real)
+                </span>
+              </div>
+              <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
+                Nivelación continua perceptual y compensación de ganancia (+3.5 dB). Iguala el volumen entre grabaciones antiguas de CDs y masterizaciones modernas comprimidas de Drive sin distorsión por recorte digital.
+              </div>
+            </div>
+            <label className="neo-toggle shrink-0 ml-3">
+              <input
+                type="checkbox"
+                checked={dynamicNormalizer}
+                onChange={e => {
+                  setDynamicNormalizer(e.target.checked);
+                  driveAudioEngine.setVolumeNormalization(e.target.checked);
+                }}
+              />
+              <span className="neo-toggle-slider"></span>
+            </label>
           </div>
 
           {/* Toggle Synth Fallback */}

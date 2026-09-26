@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Myradio 1.0 Pro",
-  "short_name": "Myradio",
+  "name": "Myradio Pro 2.0",
+  "short_name": "Myradio Pro 2.0",
   "description": "Reproductor de radio en directo con sintonización instantánea y catálogo global.",
   "start_url": "/",
   "scope": "/",

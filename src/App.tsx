@@ -101,6 +101,7 @@ export default function App() {
     let fade = 5;
     let synth = true;
     let lowData = false;
+    let norm = true;
     try {
       const sBuf = localStorage.getItem('radiostream_buffer_size');
       if (sBuf && ['64KB', '128KB', '256KB', '512KB'].includes(sBuf)) buf = sBuf;
@@ -110,6 +111,7 @@ export default function App() {
       if (sFade) fade = parseInt(sFade, 10);
       synth = localStorage.getItem('myradiopro_synth_fallback') !== 'false';
       lowData = localStorage.getItem('myradiopro_low_data') === 'true';
+      norm = localStorage.getItem('myradiopro_dynamic_normalizer') !== 'false';
     } catch {}
     return {
       bufferSize: buf,
@@ -117,6 +119,7 @@ export default function App() {
       fadeOutMins: fade,
       synthFallback: synth,
       lowDataMode: lowData,
+      dynamicNormalizer: norm,
     };
   });
 
@@ -140,6 +143,10 @@ export default function App() {
       }
       if (typeof remoteSettings.lowDataMode === 'boolean') {
         localStorage.setItem('myradiopro_low_data', String(remoteSettings.lowDataMode));
+      }
+      if (typeof remoteSettings.dynamicNormalizer === 'boolean') {
+        driveAudioEngine.setVolumeNormalization(remoteSettings.dynamicNormalizer);
+        localStorage.setItem('myradiopro_dynamic_normalizer', String(remoteSettings.dynamicNormalizer));
       }
       if (remoteSettings.lang === 'ES' || remoteSettings.lang === 'EN') {
         setLang(remoteSettings.lang);

@@ -4,6 +4,7 @@ import { driveDownloadManager } from './driveDownloadManager';
 import { googleDriveService } from './googleDriveService';
 import { teslaBackgroundService } from './teslaBackgroundService';
 import { DEFAULT_CAR_TRACKS } from '../constants/carTracks';
+import { AudioNormalizer } from './audioNormalizerNode';
 
 /**
  * DriveAudioEngine
@@ -12,6 +13,7 @@ import { DEFAULT_CAR_TRACKS } from '../constants/carTracks';
  * Architectural Highlights:
  * - Singleton AudioContext with defensive reactivation (resume()) on user gestures.
  * - Formal node disconnection (disconnectNodes) to prevent Web Audio graph leakage.
+ * - Dynamic Normalization & Real-time Automatic Gain Control (AudioNormalizer) to match loudness.
  * - Salvaguarda 1 (Lazy Buffering / Anti-Skip): No preloading next track until 10s or 25% completed.
  * - Salvaguarda 2 (Strict RAM ceiling): Max 2 Blob URLs managed deterministically by DriveDownloadManager.
  * - Salvaguarda 4 (Codec Pre-Priming): Hardware decoder pre-warmed via preload='auto' and .load() 5s before song end.
@@ -21,6 +23,8 @@ import { DEFAULT_CAR_TRACKS } from '../constants/carTracks';
 export class DriveAudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private normalizer: AudioNormalizer | null = null;
+  private isNormalizerEnabled = true;
 
   // Filtros del ecualizador paramétrico de 3 bandas
   private eqLow: BiquadFilterNode | null = null;
@@ -116,6 +120,10 @@ export class DriveAudioEngine {
             this.crossfadeSeconds = parsed;
           }
         }
+        const savedNorm = localStorage.getItem('myradiopro_dynamic_normalizer');
+        if (savedNorm !== null) {
+          this.isNormalizerEnabled = savedNorm !== 'false';
+        }
         const savedBuf = localStorage.getItem('radiostream_buffer_size');
         if (savedBuf && ['64KB', '128KB', '256KB', '512KB'].includes(savedBuf)) {
           this.bufferSize = savedBuf;
@@ -189,6 +197,10 @@ export class DriveAudioEngine {
       this.analyserNode = this.ctx.createAnalyser();
       this.analyserNode.fftSize = 64;
 
+      // 3. Inicializar e intercalar el Normalizador Dinámico y Control Automático de Ganancia (AGC)
+      this.normalizer = new AudioNormalizer(this.ctx);
+      this.normalizer.toggleNormalizer(this.isNormalizerEnabled);
+
       // Enrutamiento de efectos a destino
       this.connectNodes();
 
@@ -225,7 +237,15 @@ export class DriveAudioEngine {
 
       this.eqLow.connect(this.eqMid);
       this.eqMid.connect(this.eqHigh);
-      this.eqHigh.connect(this.masterGain);
+
+      // Conexión: EQ -> Normalizador Dinámico -> Master Gain -> Analizador -> Destino
+      if (this.normalizer) {
+        this.eqHigh.connect(this.normalizer.getInputNode());
+        this.normalizer.getOutputNode().connect(this.masterGain);
+      } else {
+        this.eqHigh.connect(this.masterGain);
+      }
+
       this.masterGain.connect(this.analyserNode);
       this.analyserNode.connect(this.ctx.destination);
 
@@ -276,9 +296,37 @@ export class DriveAudioEngine {
       if (this.analyserNode) {
         this.analyserNode.disconnect();
       }
+      if (this.normalizer) {
+        try {
+          this.normalizer.getInputNode().disconnect();
+          this.normalizer.getOutputNode().disconnect();
+        } catch {}
+      }
     } catch (err) {
       console.warn('[DriveAudioEngine] Error formal al desconectar nodos de audio:', err);
     }
+  }
+
+  /**
+   * Activa o desactiva la etapa de normalización dinámica y AGC en tiempo real
+   */
+  public setVolumeNormalization(enabled: boolean): void {
+    this.isNormalizerEnabled = enabled;
+    try {
+      localStorage.setItem('myradiopro_dynamic_normalizer', String(enabled));
+    } catch {}
+    this.normalizer?.toggleNormalizer(enabled);
+  }
+
+  public isVolumeNormalizationEnabled(): boolean {
+    return this.isNormalizerEnabled;
+  }
+
+  /**
+   * Monitoriza en tiempo real la reducción dinámica de ganancia (dB)
+   */
+  public getNormalizerReduction(): number {
+    return this.normalizer ? this.normalizer.getReduction() : 0;
   }
 
   public async setEqualizerGains(lowDb: number, midDb: number, highDb: number): Promise<void> {

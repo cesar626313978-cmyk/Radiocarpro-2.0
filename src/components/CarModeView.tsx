@@ -985,11 +985,18 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       <span className="text-cyan-300">STREAMING</span>
                     </div>
                   ) : (
-                    <>
+                    <div className="flex items-center gap-1 text-[11px] sm:text-xs font-mono">
                       <span className="text-cyan-200">{formatTime(playbackCurrentTime)}</span>
                       <span className="text-cyan-500 mx-1">/</span>
                       <span className="text-cyan-400">{formatTime(effectiveDuration)}</span>
-                    </>
+                      <span className="text-cyan-500/60 mx-1">•</span>
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded border border-cyan-400/30 text-cyan-300 bg-cyan-950/40 uppercase tracking-wider"
+                        title="Control Automático de Ganancia (AGC) y Normalización Dinámica en tiempo real activa"
+                      >
+                        AGC
+                      </span>
+                    </div>
                   )}
                 </div>
 
