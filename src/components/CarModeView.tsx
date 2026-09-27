@@ -776,7 +776,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       window.location.reload();
                     }
                   }}
-                  className="group relative flex items-center justify-between gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-0.8 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_12px_rgba(245,158,11,0.4)] hover:shadow-[0_0_18px_rgba(245,158,11,0.55)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0"
+                  className="group relative flex items-center justify-between gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-0.8 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_12px_rgba(245,158,11,0.4)] hover:shadow-[0_0_18px_rgba(245,158,11,0.55)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0 scale-[0.7] origin-center"
                   title="Conectar o sincronizar Google Drive"
                 >
                   <div className="flex items-center gap-1 text-white font-bold text-[8.5px] sm:text-[10px] tracking-wide">
@@ -882,7 +882,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     disabled={isRadioMode}
                     onClick={isRadioMode ? undefined : () => setIsMixActive(!isMixActive)}
-                    className={`w-8 xs:w-10 sm:w-14 h-10 xs:h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
+                    className={`w-[48px] xs:w-[60px] sm:w-[84px] h-10 xs:h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
                       isRadioMode
                         ? 'bg-[#030d17]/40 border border-cyan-500/10 opacity-20 cursor-not-allowed select-none'
                         : isMixActive
@@ -916,7 +916,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         setSelectedDemoIndex(prev => (prev - 1 + allTracks.length) % allTracks.length);
                       }
                     }}
-                    className="w-8 xs:w-10 sm:w-14 h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
+                    className="w-[48px] xs:w-[60px] sm:w-[84px] h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
                     title={isRadioMode ? 'Emisora anterior' : 'Pista anterior'}
                   >
                     <span className="text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">PREV</span>
@@ -928,7 +928,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={onTogglePlay}
-                    className="w-11 xs:w-14 sm:w-18 h-12 xs:h-15 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1c1917]/95 via-[#0c0a09]/95 to-[#000000] border border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.55),inset_0_1px_3px_rgba(255,255,255,0.3)] flex flex-col items-center justify-between p-1 sm:p-2 transition-all hover:scale-103 active:scale-95 cursor-pointer"
+                    className="w-[66px] xs:w-[84px] sm:w-[108px] h-12 xs:h-15 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1c1917]/95 via-[#0c0a09]/95 to-[#000000] border border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.55),inset_0_1px_3px_rgba(255,255,255,0.3)] flex flex-col items-center justify-between p-1 sm:p-2 transition-all hover:scale-103 active:scale-95 cursor-pointer"
                     title={isPlaying ? 'Pausa' : 'Reproducir'}
                   >
                     <span className="text-[7px] xs:text-[8px] sm:text-[10px] font-mono font-black text-amber-300 uppercase tracking-wider">
@@ -952,7 +952,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         setSelectedDemoIndex(prev => (prev + 1) % allTracks.length);
                       }
                     }}
-                    className="w-8 xs:w-10 sm:w-14 h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
+                    className="w-[48px] xs:w-[60px] sm:w-[84px] h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
                     title={isRadioMode ? 'Emisora siguiente' : 'Pista siguiente'}
                   >
                     <span className="text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">NEXT</span>
@@ -965,7 +965,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     disabled={isRadioMode}
                     onClick={isRadioMode ? undefined : () => setIsLoopActive(!isLoopActive)}
-                    className={`w-8 xs:w-10 sm:w-14 h-10 xs:h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
+                    className={`w-[48px] xs:w-[60px] sm:w-[84px] h-10 xs:h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
                       isRadioMode
                         ? 'bg-[#030d17]/40 border border-cyan-500/10 opacity-20 cursor-not-allowed select-none'
                         : isLoopActive
@@ -1108,11 +1108,11 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 </div>
 
                 {/* 8. BOTTOM "PISTAS (X)" OR "EMISORAS (X)" BUTTON */}
-                {activeSource === 'drive' && isDriveConnected && allTracks.length > 0 && (
+                 {activeSource === 'drive' && isDriveConnected && allTracks.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setCurrentView('library')}
-                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0"
+                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0 scale-[0.8] origin-center"
                     title="Abrir Biblioteca de Pistas de Audio"
                   >
                     <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
@@ -1126,7 +1126,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setCurrentView('library')}
-                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0"
+                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0 scale-[0.8] origin-center"
                     title="Ver Emisoras Favoritas"
                   >
                     <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
