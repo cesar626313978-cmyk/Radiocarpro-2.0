@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { audioEngine } from '../services/audioEngine';
 import { driveAudioEngine } from '../services/driveAudioEngine';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
+import { db, auth } from '../services/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -105,12 +107,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [sleepSecondsLeft, setSleepSecondsLeft] = useState(() => audioEngine.getSleepTimerSeconds());
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
 
+  // Formulario de Contacto y Feedback
+  const [feedbackType, setFeedbackType] = useState<'fallo' | 'mejora' | 'comentario' | 'soporte'>('comentario');
+  const [feedbackName, setFeedbackName] = useState('');
+  const [feedbackEmail, setFeedbackEmail] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [feedbackErrorMsg, setFeedbackErrorMsg] = useState('');
+
   // When modal opens, synchronize state with stored values and engines
   useEffect(() => {
     if (!isOpen) return;
     setBufferSize(getInitialBufferSize());
     setDriveCrossfade(getInitialCrossfade());
     setFadeOutMins(getInitialFadeOut());
+
+    // Pre-fill email if user is logged in
+    const currentUser = auth.currentUser;
+    if (currentUser && currentUser.email) {
+      setFeedbackEmail(currentUser.email);
+    }
+    // Reset form on open
+    setFeedbackStatus('idle');
+    setFeedbackMessage('');
 
     const unsubscribe = audioEngine.onSleepTimerChange(secs => {
       setSleepSecondsLeft(secs);
@@ -166,6 +185,75 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSavedToast(false);
       onClose();
     }, 700);
+  };
+
+  const handleSendFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackMessage.trim() || feedbackMessage.trim().length < 5) {
+      setFeedbackStatus('error');
+      setFeedbackErrorMsg(lang === 'ES' ? 'El mensaje debe tener al menos 5 caracteres.' : 'Message must be at least 5 characters.');
+      return;
+    }
+
+    setFeedbackStatus('sending');
+    setFeedbackErrorMsg('');
+
+    try {
+      const timestamp = new Date().toISOString();
+      const payload = {
+        name: feedbackName.trim() || 'Anónimo',
+        email: feedbackEmail.trim() || 'No proporcionado',
+        type: feedbackType,
+        message: feedbackMessage.trim(),
+        timestamp,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
+        sourceApp: 'MyRadio Pro 2.0 Web'
+      };
+
+      // 1. Guardar copia de seguridad en Firestore (Privado, 100% seguro)
+      try {
+        await addDoc(collection(db, 'feedback'), payload);
+      } catch (dbErr) {
+        console.warn('Fallo al guardar copia en Firestore:', dbErr);
+      }
+
+      // 2. Enviar email de forma segura vía FormSubmit sin exponer el email en código fuente claro
+      const encodedDest = 'Y2VzYXI2MjYzMTM5NzhAZ21haWwuY29t'; // cesar626313978@gmail.com
+      const destEmail = atob(encodedDest);
+
+      const response = await fetch(`https://formsubmit.co/ajax/${destEmail}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          _subject: `[MyRadio Pro 2.0] Nuevo ${feedbackType.toUpperCase()} de ${payload.name}`,
+          Nombre: payload.name,
+          Email: payload.email,
+          Tipo: feedbackType.toUpperCase(),
+          Mensaje: payload.message,
+          Fecha: timestamp,
+          _honey: '', // Campo trampa anti-spam
+        })
+      });
+
+      if (response.ok) {
+        setFeedbackStatus('success');
+        setFeedbackMessage('');
+        setFeedbackName('');
+      } else {
+        throw new Error('FormSubmit returned error status');
+      }
+    } catch (err) {
+      console.error('Error al enviar feedback:', err);
+      setFeedbackStatus('error');
+      setFeedbackErrorMsg(
+        lang === 'ES' 
+          ? 'Hubo un problema al enviar el formulario. Por favor, inténtalo de nuevo.' 
+          : 'There was a problem sending the form. Please try again.'
+      );
+    }
   };
 
   return (
@@ -494,6 +582,123 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span>Ver</span>
               <span className="material-symbols-outlined text-sm">open_in_new</span>
             </button>
+          </div>
+
+          {/* Formulario de Contacto / Soporte / Sugerencias */}
+          <div className="bg-[#131313] p-3.5 border-2 border-black flex flex-col gap-3">
+            <div className="flex items-center gap-2 border-b border-black pb-1.5">
+              <span className="material-symbols-outlined text-[#4edea3] text-lg">mail</span>
+              <span className="font-mono-tech text-xs text-white font-bold uppercase">
+                {lang === 'ES' ? 'Contacto y Soporte (Buzón de Sugerencias)' : 'Contact & Support'}
+              </span>
+            </div>
+            <p className="font-mono-tech text-[10px] text-[#bbcabf] leading-normal">
+              {lang === 'ES' 
+                ? '¿Has detectado algún fallo, tienes una idea de mejora o quieres proponer una emisora? Envía tus comentarios directamente al desarrollador de forma segura.' 
+                : 'Found a bug, have an improvement idea, or want to suggest a radio station? Send feedback securely.'}
+            </p>
+
+            {feedbackStatus === 'success' ? (
+              <div className="bg-[#052e16] border border-[#10B981] p-3 text-center flex flex-col gap-1">
+                <span className="material-symbols-outlined text-[#10B981] text-2xl">check_circle</span>
+                <div className="font-mono-tech text-xs text-white font-bold uppercase">
+                  {lang === 'ES' ? '¡Mensaje Enviado!' : 'Message Sent!'}
+                </div>
+                <div className="font-mono-tech text-[9px] text-[#10B981]">
+                  {lang === 'ES' ? 'Gracias por tu aportación para mejorar MyRadio Pro.' : 'Thanks for helping make MyRadio Pro better.'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFeedbackStatus('idle')}
+                  className="mt-2 text-white hover:underline text-[9px] font-mono-tech uppercase"
+                >
+                  {lang === 'ES' ? 'Enviar otro mensaje' : 'Send another message'}
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSendFeedback} className="flex flex-col gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="font-mono-tech text-[9px] text-[#bbcabf] uppercase font-bold">
+                      {lang === 'ES' ? 'Nombre / Alias' : 'Name / Alias'}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={lang === 'ES' ? 'Opcional' : 'Optional'}
+                      value={feedbackName}
+                      onChange={e => setFeedbackName(e.target.value)}
+                      className="bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="font-mono-tech text-[9px] text-[#bbcabf] uppercase font-bold">
+                      {lang === 'ES' ? 'Tu Email' : 'Your Email'}
+                    </label>
+                    <input
+                      type="email"
+                      placeholder={lang === 'ES' ? 'Opcional' : 'Optional'}
+                      value={feedbackEmail}
+                      onChange={e => setFeedbackEmail(e.target.value)}
+                      className="bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="font-mono-tech text-[9px] text-[#bbcabf] uppercase font-bold">
+                    {lang === 'ES' ? 'Tipo de Mensaje' : 'Message Type'}
+                  </label>
+                  <select
+                    value={feedbackType}
+                    onChange={e => setFeedbackType(e.target.value as any)}
+                    className="bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3]"
+                  >
+                    <option value="comentario">{lang === 'ES' ? 'Comentario / Sugerencia' : 'Comment / Suggestion'}</option>
+                    <option value="fallo">{lang === 'ES' ? 'Reportar un Fallo / Bug' : 'Report a Bug / Issue'}</option>
+                    <option value="mejora">{lang === 'ES' ? 'Propuesta de Mejora' : 'Improvement Proposal'}</option>
+                    <option value="soporte">{lang === 'ES' ? 'Soporte Técnico' : 'Technical Support'}</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="font-mono-tech text-[9px] text-[#bbcabf] uppercase font-bold">
+                    {lang === 'ES' ? 'Mensaje *' : 'Message *'}
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder={lang === 'ES' ? 'Escribe aquí tus comentarios, sugerencias o fallos...' : 'Type your comments or bug reports here...'}
+                    value={feedbackMessage}
+                    onChange={e => setFeedbackMessage(e.target.value)}
+                    className="bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3] resize-none h-20"
+                    required
+                  />
+                </div>
+
+                {feedbackStatus === 'error' && (
+                  <div className="text-[#EF4444] font-mono-tech text-[10px] font-bold bg-[#EF4444]/10 p-2 border border-[#EF4444]/30">
+                    {feedbackErrorMsg}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={feedbackStatus === 'sending'}
+                  className="neo-button bg-[#8B5CF6] text-white font-mono-tech text-xs font-bold uppercase py-2 border-2 border-black flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#7c3aed] disabled:opacity-50"
+                >
+                  {feedbackStatus === 'sending' ? (
+                    <>
+                      <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                      <span>{lang === 'ES' ? 'Enviando...' : 'Sending...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-sm">send</span>
+                      <span>{lang === 'ES' ? 'Enviar Comentario' : 'Send Feedback'}</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
           </div>
 
           {/* System Specs Readout */}

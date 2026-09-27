@@ -5,8 +5,6 @@ import { TabType } from '../types/radio';
 interface TopAppBarProps {
   currentTab: TabType;
   onSelectTab: (tab: TabType) => void;
-  onOpenSettings: () => void;
-  onOpenThemes?: () => void;
   lang: 'ES' | 'EN';
   onToggleLang: () => void;
   user: User | null;
@@ -20,8 +18,6 @@ interface TopAppBarProps {
 export const TopAppBar: React.FC<TopAppBarProps> = ({
   currentTab,
   onSelectTab,
-  onOpenSettings,
-  onOpenThemes,
   user,
   onLoginWithGoogle,
   onLogout,
@@ -57,13 +53,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
     }
   };
 
-  const navTabs: { id: TabType; label: string; icon: string }[] = [
-    { id: 'descubrir', label: 'RADIO', icon: 'radio' },
-    { id: 'favoritas', label: 'FAVORITAS', icon: 'favorite' },
-    { id: 'drive', label: 'MUSIC', icon: 'folder_open' },
-    { id: 'coche', label: 'MODO COCHE', icon: 'directions_car' },
-  ];
-
   return (
     <header className="sticky top-0 z-40 bg-[#1A1A1A] border-b-3 border-black w-full shadow-[0px_4px_0px_0px_rgba(0,0,0,1)]">
       <div className="w-full px-3 sm:px-4 md:px-6 h-16 flex items-center justify-between gap-3">
@@ -86,27 +75,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
             </span>
           </div>
         </div>
-
-        {/* Navigation links (hidden on narrower viewports to avoid crushing header actions) */}
-        <nav className="hidden min-[1180px]:flex items-center gap-1.5">
-          {navTabs.map(tab => {
-            const isActive = currentTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onSelectTab(tab.id)}
-                className={`px-3 py-1.5 font-mono-tech text-xs font-bold uppercase transition-all whitespace-nowrap shrink-0 border-2 border-black flex items-center gap-1.5 ${
-                  isActive
-                    ? 'bg-[#4edea3] text-[#003824] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                    : 'bg-[#201f1f] text-[#e5e2e1] hover:bg-[#353534]'
-                }`}
-              >
-                <span className="material-symbols-outlined text-sm">{tab.icon}</span>
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
 
         {/* Actions Zone: Responsive Login + Settings + Fullscreen */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -233,33 +201,6 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
               )}
             </div>
           )}
-
-          {/* 3. Themes Button (Biomas & Fondos) */}
-          {onOpenThemes && (
-            <button
-              onClick={onOpenThemes}
-              className="w-8 h-8 sm:w-9 sm:h-9 bg-[#201f1f] text-white border-2 border-black hover:bg-[#353534] transition-colors cursor-pointer flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 shrink-0 group"
-              title="Temas visuales y biomas dinámicos (Espacio, Fondo Marino, Lunar, Cañón, Sabana, Selva)"
-              aria-label="Temas"
-            >
-              <span
-                className="material-symbols-outlined text-base sm:text-lg group-hover:rotate-12 transition-transform"
-                style={{ color: 'var(--color-accent, #00e5ff)' }}
-              >
-                palette
-              </span>
-            </button>
-          )}
-
-          {/* 4. Settings Button (Rueda dentada, safely placed and sized) */}
-          <button
-            onClick={onOpenSettings}
-            className="w-8 h-8 sm:w-9 sm:h-9 bg-[#201f1f] text-white border-2 border-black hover:bg-[#353534] transition-colors cursor-pointer flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 shrink-0"
-            title="Ajustes de la aplicación"
-            aria-label="Ajustes"
-          >
-            <span className="material-symbols-outlined text-base sm:text-lg">settings</span>
-          </button>
 
           {/* 5. Fullscreen Toggle Button */}
           <button

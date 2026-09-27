@@ -938,8 +938,6 @@ export default function App() {
       <TopAppBar
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenThemes={() => setIsThemeModalOpen(true)}
         lang={lang}
         onToggleLang={() => setLang(l => (l === 'ES' ? 'EN' : 'ES'))}
         user={user}
@@ -951,12 +949,16 @@ export default function App() {
 
       {/* Main Layout Container */}
       <div className="flex flex-1 relative z-10 min-w-0 overflow-x-hidden">
+        {/* Layout spacer for fixed SideNav consistency */}
+        <div className="hidden md:block w-56 xl:w-64 shrink-0" />
+
         {/* Desktop Side Navigation */}
         <SideNav
           currentTab={currentTab}
           onSelectTab={handleSelectTab}
           favoritesCount={favoriteStationObjects.length}
           onOpenThemes={() => setIsThemeModalOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
           activeThemeName={THEMES[activeTheme]?.name}
         />
 
@@ -965,8 +967,8 @@ export default function App() {
           <div className={currentTab === 'descubrir' ? 'block w-full min-w-0' : 'hidden'}>
             <DiscoverView
               currentStation={currentStation}
-              isPlaying={isPlaying}
-              playbackStatus={playbackStatus}
+              isPlaying={isPlaying && activeSource === 'radio'}
+              playbackStatus={activeSource === 'radio' ? playbackStatus : 'idle'}
               errorMessage={playbackError}
               onSelectStation={st => handleTuneToStation(st)}
               onTogglePlay={handleTogglePlay}
@@ -982,8 +984,8 @@ export default function App() {
             <FavoritesView
               favoriteStations={favoriteStationObjects}
               currentStation={currentStation}
-              isPlaying={isPlaying}
-              playbackStatus={playbackStatus}
+              isPlaying={isPlaying && activeSource === 'radio'}
+              playbackStatus={activeSource === 'radio' ? playbackStatus : 'idle'}
               errorMessage={playbackError}
               onSelectStation={st => handleTuneToStation(st)}
               onTogglePlay={handleTogglePlay}

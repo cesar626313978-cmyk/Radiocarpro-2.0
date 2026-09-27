@@ -7,6 +7,7 @@ interface SideNavProps {
   favoritesCount: number;
   alarmsCount?: number;
   onOpenThemes?: () => void;
+  onOpenSettings?: () => void;
   activeThemeName?: string;
 }
 
@@ -15,6 +16,7 @@ export const SideNav: React.FC<SideNavProps> = ({
   onSelectTab,
   favoritesCount,
   onOpenThemes,
+  onOpenSettings,
   activeThemeName,
 }) => {
   const navItems: { id: TabType; label: string; icon: string; badge?: number }[] = [
@@ -25,15 +27,16 @@ export const SideNav: React.FC<SideNavProps> = ({
   ];
 
   return (
-    <aside className="hidden md:flex flex-col gap-4 xl:gap-6 p-4 xl:p-6 h-[calc(100vh-68px)] border-r-3 border-black w-56 xl:w-64 bg-[#131313] shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] shrink-0 sticky top-[68px] z-30">
-      {/* Title */}
-      <div>
-        <h2 className="font-mono-tech text-[10px] xl:text-xs tracking-widest text-[#bbcabf] uppercase mb-1">
-          SYSTEM_CONTROL
-        </h2>
-        <h1 className="font-black text-2xl xl:text-3xl tracking-tighter text-[#4edea3] uppercase leading-none">
-          SIGNAL<br />ZERO
-        </h1>
+    <aside className="hidden md:flex flex-col gap-4 xl:gap-6 p-4 xl:p-6 w-56 xl:w-64 bg-[#131313] border-r-3 border-black shadow-[4px_0px_0px_0px_rgba(0,0,0,1)] shrink-0 fixed top-16 left-0 bottom-0 z-30 overflow-y-auto no-scrollbar">
+      {/* Logo Container */}
+      <div className="flex justify-center items-center w-full pb-2 border-b border-black/30">
+        <div className="w-36 h-36 xl:w-44 xl:h-44 bg-black/40 border-3 border-black rounded-2xl overflow-hidden p-1.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:scale-[1.02] transition-transform">
+          <img
+            src="/logo.svg"
+            alt="MyRadio Pro Logo"
+            className="w-full h-full object-contain"
+          />
+        </div>
       </div>
 
       {/* Nav List */}
@@ -101,6 +104,23 @@ export const SideNav: React.FC<SideNavProps> = ({
                 {activeThemeName}
               </span>
             )}
+          </button>
+        )}
+
+        {/* Dynamic Settings Option */}
+        {onOpenSettings && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="flex items-center justify-between p-3 xl:p-3.5 border-3 border-black font-mono-tech text-xs xl:text-sm font-bold text-left uppercase transition-all duration-100 w-full cursor-pointer bg-[#201f1f] text-[#e5e2e1] hover:bg-[#353534] hover:translate-x-0.5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mt-1.5"
+            title="Ajustes de la aplicación"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <span className="material-symbols-outlined text-xl shrink-0 text-[#a3b8cc]">
+                settings
+              </span>
+              <span className="truncate">AJUSTES</span>
+            </div>
           </button>
         )}
       </nav>

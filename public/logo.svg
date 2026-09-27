@@ -1,0 +1,117 @@
+<svg viewBox="0 0 512 512" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background Blue/Black Gradient -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E3C72" />
+      <stop offset="50%" stop-color="#152238" />
+      <stop offset="100%" stop-color="#0B1320" />
+    </linearGradient>
+
+    <!-- Metallic Silver Border Gradient -->
+    <linearGradient id="silverBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="30%" stop-color="#A1B0C4" />
+      <stop offset="50%" stop-color="#FFFFFF" />
+      <stop offset="75%" stop-color="#697A90" />
+      <stop offset="100%" stop-color="#E1E7F0" />
+    </linearGradient>
+
+    <!-- Orange-Red Accent Gradient for Sound/WiFi Waves -->
+    <linearGradient id="orangeGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF3B30" />
+      <stop offset="50%" stop-color="#FF9500" />
+      <stop offset="100%" stop-color="#FFCC00" />
+    </linearGradient>
+
+    <!-- Car Body Metallic Gradient -->
+    <linearGradient id="carBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E2E8F0" />
+      <stop offset="50%" stop-color="#94A3B8" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+
+    <!-- Headlight Glow -->
+    <radialGradient id="headlightGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="40%" stop-color="#FFE082" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#FFE082" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Soft Drop Shadow -->
+    <filter id="dropShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <dropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Outer Rounded Container (Matches logo.jpg shape) -->
+  <rect x="16" y="16" width="480" height="480" rx="90" ry="90" fill="url(#bgGradient)" filter="url(#dropShadow)" />
+  <!-- Metallic Inner Frame -->
+  <rect x="24" y="24" width="464" height="464" rx="82" ry="82" fill="none" stroke="url(#silverBorder)" stroke-width="12" />
+
+  <!-- Background Glowing Orange Sun / Sound Tunnel -->
+  <circle cx="256" cy="210" r="140" fill="none" stroke="url(#orangeGradient)" stroke-width="6" stroke-opacity="0.15" />
+  <circle cx="256" cy="210" r="110" fill="none" stroke="url(#orangeGradient)" stroke-width="10" stroke-opacity="0.3" />
+
+  <!-- WiFi Sound Arcs (Concentric Waves in top-right) -->
+  <path d="M 180 150 A 110 110 0 0 1 370 180" fill="none" stroke="url(#orangeGradient)" stroke-width="14" stroke-linecap="round" />
+  <path d="M 210 120 A 150 150 0 0 1 410 170" fill="none" stroke="url(#orangeGradient)" stroke-width="14" stroke-linecap="round" />
+  <path d="M 240 90 A 190 190 0 0 1 450 160" fill="none" stroke="url(#orangeGradient)" stroke-width="14" stroke-linecap="round" />
+
+  <!-- Sleek Car Silhouette (Front View) -->
+  <g transform="translate(140, 160)">
+    <!-- Windshield -->
+    <path d="M 40 40 L 150 40 L 165 72 L 25 72 Z" fill="#2E3A4E" opacity="0.9" stroke="#475569" stroke-width="2" />
+    <path d="M 48 44 L 142 44 L 152 66 L 38 66 Z" fill="#4B5E7A" opacity="0.5" />
+
+    <!-- Side Mirrors -->
+    <path d="M 15 65 Q 0 65 5 72 Q 20 72 20 68 Z" fill="url(#carBody)" stroke="#1E293B" stroke-width="2" />
+    <path d="M 175 65 Q 190 65 185 72 Q 170 72 170 68 Z" fill="url(#carBody)" stroke="#1E293B" stroke-width="2" />
+
+    <!-- Car Hood / Front Fender -->
+    <path d="M 20 70 Q 95 62 170 70 L 180 115 Q 95 125 10 115 Z" fill="url(#carBody)" stroke="#1E293B" stroke-width="2.5" />
+
+    <!-- Grill and Air Intakes -->
+    <rect x="55" y="94" width="80" height="14" rx="7" fill="#111827" stroke="#475569" stroke-width="1.5" />
+    <!-- Grill vertical bars -->
+    <line x1="65" y1="94" x2="65" y2="108" stroke="#374151" stroke-width="2" />
+    <line x1="75" y1="94" x2="75" y2="108" stroke="#374151" stroke-width="2" />
+    <line x1="85" y1="94" x2="85" y2="108" stroke="#374151" stroke-width="2" />
+    <line x1="95" y1="94" x2="95" y2="108" stroke="#374151" stroke-width="2" />
+    <line x1="105" y1="94" x2="105" y2="108" stroke="#374151" stroke-width="2" />
+    <line x1="115" y1="94" x2="115" y2="108" stroke="#374151" stroke-width="2" />
+    <line x1="125" y1="94" x2="125" y2="108" stroke="#374151" stroke-width="2" />
+
+    <!-- Glowing Headlights -->
+    <!-- Left Headlight -->
+    <path d="M 22 80 L 48 84 L 44 94 L 20 88 Z" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1" />
+    <ellipse cx="26" cy="85" rx="14" ry="10" fill="url(#headlightGlow)" />
+    <!-- Right Headlight -->
+    <path d="M 168 80 L 142 84 L 146 94 L 170 88 Z" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1" />
+    <ellipse cx="164" cy="85" rx="14" ry="10" fill="url(#headlightGlow)" />
+
+    <!-- Lower Bumper and Wheels -->
+    <path d="M 15 112 Q 95 124 175 112 L 170 128 Q 95 132 20 128 Z" fill="#1E293B" />
+    <rect x="24" y="118" width="22" height="15" rx="3" fill="#090D16" />
+    <rect x="144" y="118" width="22" height="15" rx="3" fill="#090D16" />
+  </g>
+
+  <!-- Soundwave/Music Logo Badge (Bottom Right overlapping) -->
+  <g transform="translate(220, 180)">
+    <!-- Stylized Circle Logo with Note/Play Icon -->
+    <circle cx="60" cy="90" r="48" fill="#111827" stroke="url(#orangeGradient)" stroke-width="8" filter="url(#dropShadow)" />
+    <!-- Glowing orange path inside (the musical/car curve in logo.jpg) -->
+    <path d="M 38 98 C 38 75, 82 70, 82 92 C 82 108, 52 110, 52 120 L 76 120" fill="none" stroke="url(#orangeGradient)" stroke-width="7" stroke-linecap="round" />
+    <polygon points="56,84 56,100 70,92" fill="#FFFFFF" />
+
+    <!-- Vertical Equalizer Bars on the right -->
+    <rect x="124" y="55" width="8" height="70" rx="4" fill="url(#orangeGradient)" />
+    <rect x="138" y="70" width="8" height="40" rx="4" fill="url(#orangeGradient)" />
+    <rect x="152" y="60" width="8" height="60" rx="4" fill="url(#orangeGradient)" />
+    <rect x="166" y="80" width="8" height="20" rx="4" fill="url(#orangeGradient)" />
+    <rect x="110" y="75" width="8" height="30" rx="4" fill="url(#orangeGradient)" />
+  </g>
+
+  <!-- Typography: 'Myradio Pro' (Match logo.jpg layout) -->
+  <text x="256" y="380" fill="#FFFFFF" font-family="'Inter', -apple-system, sans-serif" font-weight="900" font-size="52" text-anchor="middle" letter-spacing="-1">Myradio</text>
+  <text x="256" y="435" fill="#E2E8F0" font-family="'Inter', -apple-system, sans-serif" font-weight="800" font-size="44" text-anchor="middle" letter-spacing="3">PRO</text>
+</svg>
