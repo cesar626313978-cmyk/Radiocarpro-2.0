@@ -619,32 +619,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 <span className="hidden md:inline">Desconectar</span>
               </button>
             </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={handleConnectDrive}
-                disabled={isConnectingDrive}
-                className="neo-button bg-[#4edea3] text-[#003824] px-4 py-2 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 hover:bg-[#38c98e] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60"
-              >
-                <span className={`material-symbols-outlined text-base ${isConnectingDrive ? 'animate-spin' : ''}`}>
-                  {isConnectingDrive ? 'sync' : 'key'}
-                </span>
-                <span>{isConnectingDrive ? 'Conectando...' : 'Conectar Google Drive'}</span>
-              </button>
-
-              {triggerCarPairing && (
-                <button
-                  type="button"
-                  onClick={triggerCarPairing}
-                  className="neo-button bg-[#8B5CF6] text-white px-3 py-2 font-mono-tech text-xs font-bold uppercase flex items-center gap-1.5 hover:bg-[#7c3aed] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                >
-                  <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
-                  <span>QR Móvil</span>
-                </button>
-              )}
-            </>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -773,17 +748,30 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               Conecta tu Google Drive para explorar y reproducir tu música organizada en carpetas (/mimusica) en una sola pantalla navegable y responsiva.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleConnectDrive}
-            disabled={isConnectingDrive}
-            className="neo-button bg-[#4edea3] text-[#003824] px-6 py-3 font-mono-tech text-xs sm:text-sm font-black uppercase flex items-center gap-2 hover:bg-[#38c98e] cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60"
-          >
-            <span className={`material-symbols-outlined text-base ${isConnectingDrive ? 'animate-spin' : ''}`}>
-              {isConnectingDrive ? 'sync' : 'key'}
-            </span>
-            <span>{isConnectingDrive ? 'Conectando...' : 'Conectar Google Drive'}</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
+            <button
+              type="button"
+              onClick={handleConnectDrive}
+              disabled={isConnectingDrive}
+              className="neo-button bg-[#4edea3] text-[#003824] px-6 py-3 font-mono-tech text-xs sm:text-sm font-black uppercase flex items-center justify-center gap-2 hover:bg-[#38c98e] cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60 shrink-0 w-full sm:w-auto"
+            >
+              <span className={`material-symbols-outlined text-base ${isConnectingDrive ? 'animate-spin' : ''}`}>
+                {isConnectingDrive ? 'sync' : 'key'}
+              </span>
+              <span>{isConnectingDrive ? 'Conectando...' : 'Conectar Google Drive'}</span>
+            </button>
+
+            {triggerCarPairing && (
+              <button
+                type="button"
+                onClick={triggerCarPairing}
+                className="neo-button bg-[#8B5CF6] text-white px-6 py-3 font-mono-tech text-xs sm:text-sm font-bold uppercase flex items-center justify-center gap-2 hover:bg-[#7c3aed] cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] shrink-0 w-full sm:w-auto"
+              >
+                <span className="material-symbols-outlined text-base">qr_code_scanner</span>
+                <span>Vincular con QR Móvil</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
