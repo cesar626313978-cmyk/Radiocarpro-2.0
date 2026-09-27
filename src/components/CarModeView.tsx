@@ -511,8 +511,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               : 'shadow-[0_0_60px_rgba(124,58,237,0.45),0_0_110px_rgba(99,102,241,0.25)]'
           }`}
           style={{
-            width: 'min(94vw, 84vh, 560px)',
-            height: 'min(94vw, 84vh, 560px)',
+            width: 'min(92vw, 68vh, 480px)',
+            height: 'min(92vw, 68vh, 480px)',
             touchAction: 'none',
           }}
           title="Progreso de audición sincronizado (12:00 a 00:00). Puedes pulsar o arrastrar para saltar a cualquier punto."
@@ -795,11 +795,11 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   </span>
                 </button>
 
-                {/* 2. STATUS BADGES ROW: [ REPRODUCIENDO ]  [ Tiempo Local ] (Kept compact to prevent circular edge overflow) */}
-                <div className="flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[11px] font-mono tracking-wider justify-center shrink-0">
-                  <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
+                 {/* 2. STATUS BADGES ROW: [ REPRODUCIENDO ]  [ Tiempo Local ] (Kept compact to prevent circular edge overflow) */}
+                <div className="flex items-center gap-1 sm:gap-2 text-[7.5px] xs:text-[9px] sm:text-[11px] font-mono tracking-wider justify-center shrink-0">
+                  <div className="flex items-center gap-1 px-1.5 xs:px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
                     <span
-                      className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
+                      className={`w-1 h-1 xs:w-1.5 xs:h-1.5 sm:w-2 sm:h-2 rounded-full ${
                         isPlaying ? 'bg-[#4edea3] animate-pulse shadow-[0_0_6px_#4edea3]' : 'bg-[#06b6d4]'
                       }`}
                     />
@@ -812,8 +812,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
-                    <span className="text-[10px] sm:text-xs">🌤️</span>
+                  <div className="flex items-center gap-1 px-1.5 xs:px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
+                    <span className="text-[8px] xs:text-[10px] sm:text-xs">🌤️</span>
                     <span className="font-bold">Local</span>
                     {localTime && <span className="text-cyan-400 font-semibold">• {localTime}</span>}
                   </div>
@@ -825,31 +825,31 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     onClick={() => setCurrentView('library')}
                     title="Ver carpeta en la biblioteca"
-                    className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#041422]/95 border border-cyan-400/50 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.3)] hover:border-cyan-300 hover:bg-[#062035] transition-all cursor-pointer truncate max-w-full"
+                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#041422]/95 border border-cyan-400/50 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.3)] hover:border-cyan-300 hover:bg-[#062035] transition-all cursor-pointer truncate max-w-full"
                   >
-                    <span className="material-symbols-outlined text-[12px] sm:text-[14px] text-[#4edea3] shrink-0">
+                    <span className="material-symbols-outlined text-[10px] xs:text-[12px] sm:text-[14px] text-[#4edea3] shrink-0">
                       {activeSource === 'radio' ? 'radio' : 'folder'}
                     </span>
-                    <span className="text-[8px] sm:text-[10px] font-mono tracking-wider uppercase text-cyan-400/80 font-bold shrink-0">
+                    <span className="text-[7px] xs:text-[8px] sm:text-[10px] font-mono tracking-wider uppercase text-cyan-400/80 font-bold shrink-0">
                       {activeSource === 'radio' ? 'Emisora:' : 'Carpeta:'}
                     </span>
-                    <span className="text-[9px] sm:text-[11px] font-mono font-black text-white truncate max-w-[150px] sm:max-w-[220px]">
+                    <span className="text-[7.5px] xs:text-[9px] sm:text-[11px] font-mono font-black text-white truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[220px]">
                       {playingFolderName}
                     </span>
                   </button>
                 </div>
 
                 {/* 3. CENTRAL TRACK TITLE, SUBTITLE & VISUALIZER */}
-                <div className="w-full px-2 sm:px-4 max-w-sm sm:max-w-md text-center shrink-0 flex flex-col items-center min-h-[58px] sm:min-h-[72px] justify-center">
+                <div className="w-full px-2 sm:px-4 max-w-sm sm:max-w-md text-center shrink-0 flex flex-col items-center min-h-[46px] xs:min-h-[58px] sm:min-h-[72px] justify-center">
                   <div className="w-full flex flex-col items-center transition-all duration-200">
                     <h1
-                      className="text-base sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] truncate w-full transition-opacity duration-150"
+                      className="text-xs xs:text-sm sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] truncate w-full transition-opacity duration-150"
                       title={displayTitle}
                     >
                       {displayTitle}
                     </h1>
                     <p
-                      className="text-[11px] sm:text-sm font-semibold text-amber-300 mt-0.5 truncate max-w-full drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)] transition-opacity duration-150"
+                      className="text-[9px] xs:text-[11px] sm:text-sm font-semibold text-amber-300 mt-0.5 truncate max-w-full drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)] transition-opacity duration-150"
                       title={displaySubtitle}
                     >
                       {displaySubtitle}
@@ -875,14 +875,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   )}
                 </div>
 
-                {/* 4. TRANSPORT 5-BUTTON DECK */}
-                <div className="flex items-center justify-center gap-1.5 sm:gap-3 w-full px-1 shrink-0">
+                 {/* 4. TRANSPORT 5-BUTTON DECK */}
+                <div className="flex items-center justify-center gap-1 xs:gap-1.5 sm:gap-3 w-full px-1 shrink-0">
                   {/* MIX / Shuffle Button (Dimmed and inactive in Radio mode) */}
                   <button
                     type="button"
                     disabled={isRadioMode}
                     onClick={isRadioMode ? undefined : () => setIsMixActive(!isMixActive)}
-                    className={`w-10 sm:w-14 h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
+                    className={`w-8 xs:w-10 sm:w-14 h-10 xs:h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
                       isRadioMode
                         ? 'bg-[#030d17]/40 border border-cyan-500/10 opacity-20 cursor-not-allowed select-none'
                         : isMixActive
@@ -891,14 +891,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     }`}
                     title={isRadioMode ? 'Modo MIX no aplicable a radio en directo' : 'Reproducción aleatoria (MIX)'}
                   >
-                    <span className={`text-[8px] sm:text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
+                    <span className={`text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
                       MIX
                     </span>
-                    <span className={`material-symbols-outlined text-base sm:text-xl ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-200'}`}>
+                    <span className={`material-symbols-outlined text-[13px] xs:text-base sm:text-xl ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-200'}`}>
                       shuffle
                     </span>
                     <span
-                      className={`w-4 sm:w-5 h-[2px] rounded-full ${
+                      className={`w-3 xs:w-4 sm:w-5 h-[2px] rounded-full ${
                         !isRadioMode && isMixActive ? 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]' : 'bg-transparent'
                       }`}
                     />
@@ -916,28 +916,28 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         setSelectedDemoIndex(prev => (prev - 1 + allTracks.length) % allTracks.length);
                       }
                     }}
-                    className="w-10 sm:w-14 h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
+                    className="w-8 xs:w-10 sm:w-14 h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
                     title={isRadioMode ? 'Emisora anterior' : 'Pista anterior'}
                   >
-                    <span className="text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">PREV</span>
-                    <span className="material-symbols-outlined text-base sm:text-xl text-cyan-100">skip_previous</span>
-                    <span className="w-4 sm:w-5 h-[2px] bg-transparent" />
+                    <span className="text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">PREV</span>
+                    <span className="material-symbols-outlined text-[13px] xs:text-base sm:text-xl text-cyan-100">skip_previous</span>
+                    <span className="w-3 xs:w-4 sm:w-5 h-[2px] bg-transparent" />
                   </button>
 
                   {/* PLAY / PAUSE Button (Center - Larger with Amber/Gold Glow) */}
                   <button
                     type="button"
                     onClick={onTogglePlay}
-                    className="w-14 sm:w-18 h-15 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1c1917]/95 via-[#0c0a09]/95 to-[#000000] border-2 border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.55),inset_0_1px_3px_rgba(255,255,255,0.3)] flex flex-col items-center justify-between p-1 sm:p-2 transition-all hover:scale-103 active:scale-95 cursor-pointer"
+                    className="w-11 xs:w-14 sm:w-18 h-12 xs:h-15 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1c1917]/95 via-[#0c0a09]/95 to-[#000000] border border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.55),inset_0_1px_3px_rgba(255,255,255,0.3)] flex flex-col items-center justify-between p-1 sm:p-2 transition-all hover:scale-103 active:scale-95 cursor-pointer"
                     title={isPlaying ? 'Pausa' : 'Reproducir'}
                   >
-                    <span className="text-[8px] sm:text-[10px] font-mono font-black text-amber-300 uppercase tracking-wider">
+                    <span className="text-[7px] xs:text-[8px] sm:text-[10px] font-mono font-black text-amber-300 uppercase tracking-wider">
                       {isPlaying ? 'PAUSE' : 'PLAY'}
                     </span>
-                    <span className="material-symbols-outlined text-xl sm:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]">
+                    <span className="material-symbols-outlined text-sm xs:text-xl sm:text-3xl text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]">
                       {isPlaying ? 'pause' : 'play_arrow'}
                     </span>
-                    <span className="w-6 sm:w-7 h-[3px] rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                    <span className="w-4 xs:w-6 sm:w-7 h-[2px] xs:h-[3px] rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
                   </button>
 
                   {/* NEXT Button */}
@@ -952,12 +952,12 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         setSelectedDemoIndex(prev => (prev + 1) % allTracks.length);
                       }
                     }}
-                    className="w-10 sm:w-14 h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
+                    className="w-8 xs:w-10 sm:w-14 h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
                     title={isRadioMode ? 'Emisora siguiente' : 'Pista siguiente'}
                   >
-                    <span className="text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">NEXT</span>
-                    <span className="material-symbols-outlined text-base sm:text-xl text-cyan-100">skip_next</span>
-                    <span className="w-4 sm:w-5 h-[2px] bg-transparent" />
+                    <span className="text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">NEXT</span>
+                    <span className="material-symbols-outlined text-[13px] xs:text-base sm:text-xl text-cyan-100">skip_next</span>
+                    <span className="w-3 xs:w-4 sm:w-5 h-[2px] bg-transparent" />
                   </button>
 
                   {/* LOOP / Repeat Button (Dimmed and inactive in Radio mode) */}
@@ -965,7 +965,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     disabled={isRadioMode}
                     onClick={isRadioMode ? undefined : () => setIsLoopActive(!isLoopActive)}
-                    className={`w-10 sm:w-14 h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
+                    className={`w-8 xs:w-10 sm:w-14 h-10 xs:h-13 sm:h-17 rounded-xl flex flex-col items-center justify-between p-1 transition-all ${
                       isRadioMode
                         ? 'bg-[#030d17]/40 border border-cyan-500/10 opacity-20 cursor-not-allowed select-none'
                         : isLoopActive
@@ -974,14 +974,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     }`}
                     title={isRadioMode ? 'Modo LOOP no aplicable a radio en directo' : 'Repetir pista (LOOP)'}
                   >
-                    <span className={`text-[8px] sm:text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
+                    <span className={`text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
                       LOOP
                     </span>
-                    <span className={`material-symbols-outlined text-base sm:text-xl ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-200'}`}>
+                    <span className={`material-symbols-outlined text-[13px] xs:text-base sm:text-xl ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-200'}`}>
                       repeat
                     </span>
                     <span
-                      className={`w-4 sm:w-5 h-[2px] rounded-full ${
+                      className={`w-3 xs:w-4 sm:w-5 h-[2px] rounded-full ${
                         !isRadioMode && isLoopActive ? 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]' : 'bg-transparent'
                       }`}
                     />
@@ -990,24 +990,24 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
                 {/* 5. MONOSPACE DIGITAL TIME COUNTER */}
                 <div 
-                  className="text-cyan-300 font-mono tracking-widest text-[11px] sm:text-sm font-bold drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] select-none shrink-0"
+                  className="text-cyan-300 font-mono tracking-widest text-[9px] xs:text-[11px] sm:text-sm font-bold drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] select-none shrink-0"
                   title="Progreso de audición sincronizado con el archivo de audio"
                 >
                   {activeSource === 'radio' ? (
-                    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-emerald-400 font-mono">
-                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <div className="flex items-center gap-1 text-[9px] xs:text-xs text-emerald-400 font-mono">
+                      <span className="w-1 h-1 xs:w-1.5 xs:h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-ping" />
                       <span>EN DIRECTO</span>
-                      <span className="text-cyan-500 mx-1">•</span>
+                      <span className="text-cyan-500 mx-0.5 sm:mx-1">•</span>
                       <span className="text-cyan-300">STREAMING</span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1 text-[11px] sm:text-xs font-mono">
+                    <div className="flex items-center gap-1 text-[9px] xs:text-xs font-mono">
                       <span className="text-cyan-200">{formatTime(playbackCurrentTime)}</span>
-                      <span className="text-cyan-500 mx-1">/</span>
+                      <span className="text-cyan-500 mx-0.5 sm:mx-1">/</span>
                       <span className="text-cyan-400">{formatTime(effectiveDuration)}</span>
-                      <span className="text-cyan-500/60 mx-1">•</span>
+                      <span className="text-cyan-500/60 mx-0.5 sm:mx-1">•</span>
                       <span
-                        className="text-[9px] px-1.5 py-0.5 rounded border border-cyan-400/30 text-cyan-300 bg-cyan-950/40 uppercase tracking-wider"
+                        className="text-[8px] px-1 py-0.2 rounded border border-cyan-400/30 text-cyan-300 bg-cyan-950/40 uppercase tracking-wider"
                         title="Control Automático de Ganancia (AGC) y Normalización Dinámica en tiempo real activa"
                       >
                         AGC
@@ -1017,30 +1017,30 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 </div>
 
                 {/* 6. UTILITY CONTROLS: [ Privacidad ] [ Audio Coche ] (Integrated side-by-side in wide lower-mid section) */}
-                <div className="flex items-center justify-center gap-2 sm:gap-3 shrink-0">
+                <div className="flex items-center justify-center gap-1 xs:gap-2 sm:gap-3 shrink-0">
                   <button
                     type="button"
                     onClick={() => setShowPrivacyModal(true)}
-                    className="flex items-center gap-1 px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
+                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
                     title="Política de Privacidad y Seguridad"
                   >
-                    <span className="material-symbols-outlined text-[11px] sm:text-sm text-cyan-400">verified_user</span>
+                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-cyan-400">verified_user</span>
                     <span>Privacidad</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setShowCarAudioTip(true)}
-                    className="flex items-center gap-1 px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
+                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
                     title="Consejo de audio si la radio del coche suena a la vez"
                   >
-                    <span className="material-symbols-outlined text-[11px] sm:text-sm text-amber-400">volume_up</span>
+                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-amber-400">volume_up</span>
                     <span>Audio Coche</span>
                   </button>
                 </div>
 
                 {/* 7. VOLUME SLIDER POD */}
-                <div className="w-[74%] max-w-[175px] sm:max-w-[195px] flex items-center justify-between gap-1 sm:gap-1.5 px-2 py-0.5 sm:py-1 rounded-full bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0 mb-1">
+                <div className="w-[68%] xs:w-[74%] max-w-[140px] xs:max-w-[175px] sm:max-w-[195px] flex items-center justify-between gap-1 sm:gap-1.5 px-2 py-0.5 sm:py-1 rounded-full bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0 mb-0.5 sm:mb-1">
                   {/* Speaker Mute/Unmute */}
                   <button
                     type="button"
