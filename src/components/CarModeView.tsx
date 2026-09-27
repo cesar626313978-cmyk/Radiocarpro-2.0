@@ -1156,8 +1156,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   </h2>
                 </div>
 
-                {/* 2. SEARCH INPUT */}
-                <div className="w-full max-w-[320px] sm:max-w-sm shrink-0 px-2 mt-1">
+                 {/* 2. SEARCH INPUT */}
+                <div className="w-full max-w-[320px] sm:max-w-sm shrink-0 px-2 mt-1" onPointerDown={(e) => e.stopPropagation()}>
                   <div className="relative flex items-center w-full rounded-full bg-black/40 border border-cyan-500/40 hover:border-cyan-400 focus-within:border-cyan-300 px-3.5 py-1.5 transition-all shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)]">
                     <span className="material-symbols-outlined text-base text-cyan-400/80 mr-2">search</span>
                     <input
@@ -1180,7 +1180,10 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 </div>
 
                 {/* 3. LIST STACK */}
-                <div className="flex-1 w-full max-w-[340px] sm:max-w-[380px] my-1 sm:my-2 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin scrollbar-thumb-cyan-500 scrollbar-track-transparent">
+                <div 
+                  className="flex-1 w-full max-w-[340px] sm:max-w-[380px] my-1 sm:my-2 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin scrollbar-thumb-cyan-500 scrollbar-track-transparent"
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
                   {activeSource === 'radio' ? (
                     // Render Radio Stations List
                     filteredStations.map((station, idx) => {
@@ -1303,9 +1306,10 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setCurrentView('player')}
-                  className="flex items-center gap-2 px-5 sm:px-6 py-1.5 sm:py-2 rounded-full bg-[#041e2e]/90 hover:bg-[#072f48] border border-cyan-400 shadow-[0_0_18px_rgba(6,182,212,0.4)] hover:shadow-[0_0_24px_rgba(6,182,212,0.6)] text-cyan-200 hover:text-white font-bold text-xs sm:text-sm tracking-wide uppercase transition-all cursor-pointer shrink-0"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="flex items-center gap-2 px-4 sm:px-5 py-1 sm:py-1.5 rounded-full bg-[#041e2e]/90 hover:bg-[#072f48] border border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_18px_rgba(6,182,212,0.5)] text-cyan-200 hover:text-white font-bold text-[10px] sm:text-xs tracking-wide uppercase transition-all cursor-pointer shrink-0 scale-[0.82] origin-center mb-1.5 sm:mb-3"
                 >
-                  <span className="material-symbols-outlined text-base sm:text-lg text-cyan-300">public</span>
+                  <span className="material-symbols-outlined text-sm sm:text-base text-cyan-300">public</span>
                   <span>Volver al Reproductor Central</span>
                 </button>
               </motion.div>
