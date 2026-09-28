@@ -30,7 +30,7 @@ class RadioAudioEngine {
   private currentStreamUrl = '';
   private shouldBePlaying = false;
   private reconnectAttempts = 0;
-  private readonly maxReconnectAttempts = 15;
+  private readonly maxReconnectAttempts = 3;
   private reconnectTimer: number | null = null;
   private freezeWatchdogTimer: number | null = null;
   private unregisterHeartbeat: (() => void) | null = null;
@@ -301,13 +301,15 @@ class RadioAudioEngine {
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('[RadioAudioEngine] Límite de reconexiones alcanzado sin señal.');
-      this.setStatus('error', 'Sin señal de cobertura tras varios intentos');
-      if (onError) onError('Sin señal de cobertura');
+      this.setStatus('error', 'Emisora no disponible');
+      if (onError) onError('Emisora no disponible');
+      this.stop(); // Cleanly stop and cut the stuck connection!
+      this.setStatus('error', 'Emisora no disponible'); // Maintain error state
       return;
     }
 
     this.reconnectAttempts++;
-    // Progressive backoff: 1.2s, 2s, 3.2s, 4.5s, max 8s
+    // Progressive backoff: 1.2s, 2s, 3.2s
     const delay = Math.min(8000, Math.floor(1200 * Math.pow(1.28, this.reconnectAttempts - 1)));
     this.setStatus('buffering', `Recuperando señal (Reintento ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
 

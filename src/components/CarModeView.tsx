@@ -17,6 +17,7 @@ interface CarModeViewProps {
   currentDriveTrack: DriveAudioFile | null;
   isPlaying: boolean;
   playbackStatus?: string;
+  errorMessage?: string;
   onTogglePlay: () => void;
   onNext?: () => void;
   onPrev?: () => void;
@@ -38,6 +39,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   currentDriveTrack,
   isPlaying,
   playbackStatus = 'idle',
+  errorMessage = '',
   onTogglePlay,
   onNext,
   onPrev,
@@ -75,6 +77,33 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
   // Audio coexistence tip state
   const [showCarAudioTip, setShowCarAudioTip] = useState<boolean>(false);
+
+  // Dynamic orb size calculation for tablet, car, and phone screen sizes
+  const [orbSize, setOrbSize] = useState('min(92vw, 68vh, 480px)');
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      if (w < 480) {
+        // Small phones portrait
+        setOrbSize('min(94vw, 72vh, 390px)');
+      } else if (w < 768) {
+        // Medium phones or portrait small tablets
+        setOrbSize('min(92vw, 75vh, 440px)');
+      } else {
+        // Cars, tablets, desktop screens (landscape / big portrait)
+        // Set it to fill up to 84vh, max 660px! 
+        // This makes the sphere 120%-130% larger on tablets/car screens,
+        // so all buttons, texts, and badges fit beautifully inside without any overlap or truncation.
+        setOrbSize('min(94vw, 84vh, 660px)');
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Drive authentication & playlist state
   const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => googleDriveService.hasToken());
@@ -343,6 +372,9 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
   // Track name cleanup for display
   const displayTitle = useMemo(() => {
+    if (playbackStatus === 'error') {
+      return 'Emisora no disponible';
+    }
     if (!isDriveConnected && activeSource !== 'drive' && !isPlaying) {
       return 'Desconectado de Drive';
     }
@@ -350,9 +382,12 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
       return currentStation.name;
     }
     return activeTrack?.name.replace(/\.(mp3|wav|m4a|flac|aac|ogg)$/i, '') || 'Desconectado de Drive';
-  }, [isDriveConnected, activeSource, isPlaying, currentStation, activeTrack]);
+  }, [isDriveConnected, activeSource, isPlaying, currentStation, activeTrack, playbackStatus]);
 
   const displaySubtitle = useMemo(() => {
+    if (playbackStatus === 'error') {
+      return errorMessage || 'El enlace está roto o no hay conexión de internet';
+    }
     if (!isDriveConnected && activeSource !== 'drive' && !isPlaying) {
       return 'Pulsa el botón naranja "Conectar Drive"';
     }
@@ -360,7 +395,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
       return `${currentStation.country} • ${currentStation.genre || 'Radio en Directo'}`;
     }
     return activeTrack?.artist || 'AudioCar Synth Collective';
-  }, [isDriveConnected, activeSource, isPlaying, currentStation, activeTrack]);
+  }, [isDriveConnected, activeSource, isPlaying, currentStation, activeTrack, playbackStatus, errorMessage]);
 
   // Folder name in playback (or radio station)
   const playingFolderName = useMemo(() => {
@@ -513,8 +548,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               : 'shadow-[0_0_60px_rgba(124,58,237,0.45),0_0_110px_rgba(99,102,241,0.25)]'
           }`}
           style={{
-            width: 'min(92vw, 68vh, 480px)',
-            height: 'min(92vw, 68vh, 480px)',
+            width: orbSize,
+            height: orbSize,
             touchAction: 'none',
           }}
           title="Progreso de audición sincronizado (12:00 a 00:00). Puedes pulsar o arrastrar para saltar a cualquier punto."
@@ -558,6 +593,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 <stop offset="0%" stopColor="#4edea3" />
                 <stop offset="50%" stopColor="#10b981" />
                 <stop offset="100%" stopColor="#06b6d4" />
+              </linearGradient>
+
+              {/* Solar Eclipse Warm/Cool Plasma Gradient (Warm and subtle sunset-gold eclipse for nighttime comfort) */}
+              <linearGradient id="solarCoronaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#7c2d12" /> {/* Deep dark warm brown-orange */}
+                <stop offset="35%" stopColor="#b45309" /> {/* Warm Golden Amber */}
+                <stop offset="75%" stopColor="#ea580c" /> {/* Sunset Orange */}
+                <stop offset="100%" stopColor="#d97706" /> {/* Cozy Amber */}
               </linearGradient>
 
               {/* Atmospheric neon bloom filter */}
@@ -665,6 +708,81 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   strokeDashoffset={(2 * Math.PI * 95.5) * (1 - progressRatio)}
                   opacity="0.9"
                   className="transition-[stroke-dashoffset] duration-150 ease-out"
+                />
+              </g>
+            ) : null}
+
+            {/* SOLAR ECLIPSE PLASMA CORONA GLOW (ACTIVE ONLY IN RADIO MODE WHEN PLAYING) */}
+            {activeSource === 'radio' && isPlaying ? (
+              <g>
+                <style>{`
+                  @keyframes solarCoronaRotate {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                  }
+                  @keyframes solarCoronaPulse {
+                    0% { stroke-width: 2.2px; opacity: 0.35; }
+                    50% { stroke-width: 4.8px; opacity: 0.55; }
+                    100% { stroke-width: 2.2px; opacity: 0.35; }
+                  }
+                  @keyframes solarCoronaShimmer {
+                    0% { stroke-dashoffset: 0; }
+                    100% { stroke-dashoffset: -800; }
+                  }
+                  .solar-corona-aura {
+                    transform-origin: 100px 100px;
+                    animation: solarCoronaRotate 35s linear infinite, solarCoronaPulse 4.5s ease-in-out infinite alternate;
+                  }
+                  .solar-corona-plasma {
+                    transform-origin: 100px 100px;
+                    animation: solarCoronaRotate 18s linear infinite reverse, solarCoronaShimmer 16s linear infinite;
+                  }
+                  .solar-corona-core {
+                    transform-origin: 100px 100px;
+                    animation: solarCoronaPulse 2.5s ease-in-out infinite alternate;
+                  }
+                `}</style>
+
+                {/* 1. Deep Atmospheric Corona Aura (Tenuous, narrow, comfortable warm glow) */}
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="95.5"
+                  fill="none"
+                  stroke="url(#solarCoronaGrad)"
+                  strokeWidth="3.2"
+                  strokeLinecap="round"
+                  className="solar-corona-aura"
+                  filter="url(#orbNeonGlow)"
+                  opacity="0.45"
+                />
+
+                {/* 2. Plasma Filament Flare Layer (Soft, subtle warmth in organic movement) */}
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="95.5"
+                  fill="none"
+                  stroke="url(#solarCoronaGrad)"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeDasharray="4 12 18 8 25 10"
+                  className="solar-corona-plasma"
+                  filter="url(#orbNeonGlow)"
+                  opacity="0.55"
+                />
+
+                {/* 3. Soft Warm Amber Edge Filament (No bright white core) */}
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="95.5"
+                  fill="none"
+                  stroke="#f59e0b"
+                  strokeWidth="1.0"
+                  strokeLinecap="round"
+                  className="solar-corona-core"
+                  opacity="0.45"
                 />
               </g>
             ) : null}
@@ -778,16 +896,16 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       window.location.reload();
                     }
                   }}
-                  className="group relative flex items-center justify-between gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-0.8 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_12px_rgba(245,158,11,0.4)] hover:shadow-[0_0_18px_rgba(245,158,11,0.55)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0 scale-[0.7] origin-center"
+                  className="group relative flex items-center justify-between gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-0.8 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_12px_rgba(245,158,11,0.4)] hover:shadow-[0_0_18px_rgba(245,158,11,0.55)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0 scale-[0.7] sm:scale-100 origin-center"
                   title={t.carMode.connectDrive}
                 >
-                  <div className="flex items-center gap-1 text-white font-bold text-[8.5px] sm:text-[10px] tracking-wide">
-                    <span className="material-symbols-outlined text-[10px] sm:text-xs text-amber-100">hard_drive</span>
+                  <div className="flex items-center gap-1 text-white font-bold text-[8.5px] sm:text-xs tracking-wide">
+                    <span className="material-symbols-outlined text-[10px] sm:text-sm text-amber-100">hard_drive</span>
                     <span>{isDriveConnected ? 'Google Drive' : t.carMode.connectDrive}</span>
                   </div>
 
                   <span
-                    className={`text-[7px] sm:text-[8px] font-mono font-black uppercase px-1 py-0.2 sm:py-0.5 rounded-full ${
+                    className={`text-[7px] sm:text-[9px] font-mono font-black uppercase px-1 py-0.2 sm:py-0.5 rounded-full ${
                       isDriveConnected
                         ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-400/50'
                         : 'bg-black/40 text-amber-200 border border-amber-400/40'
@@ -797,16 +915,26 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   </span>
                 </button>
 
-                 {/* 2. STATUS BADGES ROW: [ REPRODUCIENDO ]  [ Tiempo Local ] (Kept compact to prevent circular edge overflow) */}
-                <div className="flex items-center gap-1 sm:gap-2 text-[7.5px] xs:text-[9px] sm:text-[11px] font-mono tracking-wider justify-center shrink-0">
-                  <div className="flex items-center gap-1 px-1.5 xs:px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
+                  {/* 2. STATUS BADGES ROW: [ REPRODUCIENDO ]  [ Tiempo Local ] (Kept compact to prevent circular edge overflow) */}
+                <div className="flex items-center gap-1 sm:gap-2 text-[7.5px] xs:text-[9px] sm:text-xs font-mono tracking-wider justify-center shrink-0">
+                  <div className={`flex items-center gap-1 px-1.5 xs:px-2 sm:px-3.5 py-0.5 sm:py-1 rounded-full border shadow-[0_0_12px_rgba(6,182,212,0.2)] ${
+                    playbackStatus === 'error'
+                      ? 'bg-red-950/90 border-red-500/50 text-red-300 shadow-[0_0_12px_rgba(239,68,68,0.3)]'
+                      : 'bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200'
+                  }`}>
                     <span
                       className={`w-1 h-1 xs:w-1.5 xs:h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                        isPlaying ? 'bg-[#4edea3] animate-pulse shadow-[0_0_6px_#4edea3]' : 'bg-[#06b6d4]'
+                        playbackStatus === 'error'
+                          ? 'bg-red-400 shadow-[0_0_6px_#ef4444]'
+                          : isPlaying
+                          ? 'bg-[#4edea3] animate-pulse shadow-[0_0_6px_#4edea3]'
+                          : 'bg-[#06b6d4]'
                       }`}
                     />
-                    <span className="font-bold uppercase">
-                      {playbackStatus === 'buffering'
+                    <span className="font-bold uppercase sm:text-[11px] md:text-xs">
+                      {playbackStatus === 'error'
+                        ? 'NO DISPONIBLE'
+                        : playbackStatus === 'buffering'
                         ? t.carMode.buffering
                         : isPlaying
                         ? t.carMode.playing
@@ -814,35 +942,35 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1 px-1.5 xs:px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
+                  <div className="flex items-center gap-1 px-1.5 xs:px-2 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
                     <span className="text-[8px] xs:text-[10px] sm:text-xs">🌤️</span>
-                    <span className="font-bold">{t.carMode.localTime}</span>
-                    {localTime && <span className="text-cyan-400 font-semibold">• {localTime}</span>}
+                    <span className="font-bold sm:text-[11px] md:text-xs">{t.carMode.localTime}</span>
+                    {localTime && <span className="text-cyan-400 font-semibold sm:text-[11px] md:text-xs">• {localTime}</span>}
                   </div>
                 </div>
 
                 {/* 2.5 FOLDER IN PLAYBACK BADGE (Información de la carpeta que se está reproduciendo) */}
-                <div className="flex items-center justify-center shrink-0 max-w-[88%] sm:max-w-sm mt-0.5 sm:mt-1">
+                <div className="flex items-center justify-center shrink-0 max-w-[88%] sm:max-w-md mt-0.5 sm:mt-1">
                   <button
                     type="button"
                     onClick={() => setCurrentView('library')}
                     title={t.carMode.viewFolderInLibrary}
                     className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#041422]/95 border border-cyan-400/50 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.3)] hover:border-cyan-300 hover:bg-[#062035] transition-all cursor-pointer truncate max-w-full"
                   >
-                    <span className="material-symbols-outlined text-[10px] xs:text-[12px] sm:text-[14px] text-[#4edea3] shrink-0">
+                    <span className="material-symbols-outlined text-[10px] xs:text-[12px] sm:text-base text-[#4edea3] shrink-0">
                       {activeSource === 'radio' ? 'radio' : 'folder'}
                     </span>
-                    <span className="text-[7px] xs:text-[8px] sm:text-[10px] font-mono tracking-wider uppercase text-cyan-400/80 font-bold shrink-0">
+                    <span className="text-[7px] xs:text-[8px] sm:text-[11px] font-mono tracking-wider uppercase text-cyan-400/80 font-bold shrink-0">
                       {activeSource === 'radio' ? t.carMode.station : t.carMode.folder}
                     </span>
-                    <span className="text-[7.5px] xs:text-[9px] sm:text-[11px] font-mono font-black text-white truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[220px]">
+                    <span className="text-[7.5px] xs:text-[9px] sm:text-xs font-mono font-black text-white truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[280px]">
                       {playingFolderName}
                     </span>
                   </button>
                 </div>
 
                 {/* 3. CENTRAL TRACK TITLE, SUBTITLE & VISUALIZER */}
-                <div className="w-full px-2 sm:px-4 max-w-sm sm:max-w-md text-center shrink-0 flex flex-col items-center min-h-[46px] xs:min-h-[58px] sm:min-h-[72px] justify-center">
+                <div className="w-full px-2 sm:px-4 max-w-sm sm:max-w-lg text-center shrink-0 flex flex-col items-center min-h-[46px] xs:min-h-[58px] sm:min-h-[82px] justify-center">
                   <div className="w-full flex flex-col items-center transition-all duration-200">
                     <h1
                       className="text-xs xs:text-sm sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] truncate w-full transition-opacity duration-150"
@@ -1018,9 +1146,32 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   )}
                 </div>
 
-                {/* 6. VOLUME SLIDER POD (Swapped: Now above utility buttons, identical size) */}
+                 {/* 6. UTILITY CONTROLS: [ Privacidad ] [ Audio Coche ] (Swapped: Now above volume slider, identical size) */}
+                <div className="flex items-center justify-center gap-1 xs:gap-2 sm:gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowPrivacyModal(true)}
+                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[13px] md:text-sm font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
+                    title={t.privacy.title}
+                  >
+                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-base text-cyan-400">verified_user</span>
+                    <span>{t.carMode.privacy}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCarAudioTip(true)}
+                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[13px] md:text-sm font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
+                    title={t.carMode.carAudioTitle}
+                  >
+                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-base text-amber-400">volume_up</span>
+                    <span>{t.carMode.carAudio}</span>
+                  </button>
+                </div>
+
+                 {/* 7. VOLUME SLIDER POD (Swapped: Now below utility buttons, identical size) */}
                 <div 
-                  className="w-[80%] xs:w-[84%] sm:w-[88%] max-w-[210px] xs:max-w-[250px] sm:max-w-[280px] flex items-center justify-between gap-1 xs:gap-1.5 sm:gap-2 px-2 xs:px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0"
+                  className="w-[80%] xs:w-[84%] sm:w-[88%] max-w-[210px] xs:max-w-[250px] sm:max-w-[340px] md:max-w-[380px] flex items-center justify-between gap-1 xs:gap-1.5 sm:gap-2 px-2 xs:px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0"
                   onPointerDown={(e) => e.stopPropagation()}
                 >
                   {/* Speaker Mute/Unmute */}
@@ -1095,35 +1246,12 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   </span>
                 </div>
 
-                {/* 7. UTILITY CONTROLS: [ Privacidad ] [ Audio Coche ] (Swapped: Now below volume slider, identical size) */}
-                <div className="flex items-center justify-center gap-1 xs:gap-2 sm:gap-3 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowPrivacyModal(true)}
-                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
-                    title={t.privacy.title}
-                  >
-                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-cyan-400">verified_user</span>
-                    <span>{t.carMode.privacy}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowCarAudioTip(true)}
-                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
-                    title={t.carMode.carAudioTitle}
-                  >
-                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-amber-400">volume_up</span>
-                    <span>{t.carMode.carAudio}</span>
-                  </button>
-                </div>
-
                 {/* 8. BOTTOM "PISTAS (X)" OR "EMISORAS (X)" BUTTON */}
                  {activeSource === 'drive' && isDriveConnected && allTracks.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setCurrentView('library')}
-                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0 scale-[0.8] origin-center"
+                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0 scale-[0.8] sm:scale-100 origin-center"
                     title={t.carMode.tracksLibrary}
                   >
                     <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
@@ -1137,7 +1265,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setCurrentView('library')}
-                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0 scale-[0.8] origin-center"
+                    className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0 scale-[0.8] sm:scale-100 origin-center"
                     title={t.carMode.favoriteStations}
                   >
                     <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
@@ -1318,7 +1446,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   type="button"
                   onClick={() => setCurrentView('player')}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="flex items-center gap-2 px-4 sm:px-5 py-1 sm:py-1.5 rounded-full bg-[#041e2e]/90 hover:bg-[#072f48] border border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_18px_rgba(6,182,212,0.5)] text-cyan-200 hover:text-white font-bold text-[10px] sm:text-xs tracking-wide uppercase transition-all cursor-pointer shrink-0 scale-[0.82] origin-center mb-1.5 sm:mb-3"
+                  className="flex items-center gap-2 px-4 sm:px-5 py-1 sm:py-1.5 rounded-full bg-[#041e2e]/90 hover:bg-[#072f48] border border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_18px_rgba(6,182,212,0.5)] text-cyan-200 hover:text-white font-bold text-[10px] sm:text-xs tracking-wide uppercase transition-all cursor-pointer shrink-0 scale-[0.82] sm:scale-100 origin-center mb-1.5 sm:mb-3"
                 >
                   <span className="material-symbols-outlined text-sm sm:text-base text-cyan-300">public</span>
                   <span>{t.carMode.returnToPlayer}</span>

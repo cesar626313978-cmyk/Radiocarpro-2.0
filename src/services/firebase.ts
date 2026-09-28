@@ -211,6 +211,7 @@ let pendingSave: {
     alarms: Alarm[];
     totalMinutesListened?: number;
     settings?: Record<string, unknown>;
+    stationPlaytimes?: Record<string, number>;
   };
 } | null = null;
 
@@ -222,6 +223,7 @@ async function executeFirestoreSave(
     alarms: Alarm[];
     totalMinutesListened?: number;
     settings?: Record<string, unknown>;
+    stationPlaytimes?: Record<string, number>;
   }
 ): Promise<void> {
   if (isQuotaExceeded || !userId) return;
@@ -240,6 +242,9 @@ async function executeFirestoreSave(
     };
     if (data.settings) {
       payload.settings = data.settings;
+    }
+    if (data.stationPlaytimes) {
+      payload.stationPlaytimes = data.stationPlaytimes;
     }
     await setDoc(userRef, payload, { merge: true });
     console.log(`[Firestore] Sincronización guardada exitosamente (${data.favorites.length} favoritas, settings: ${data.settings ? 'sí' : 'no'}) para UID: ${userId}`);
@@ -300,6 +305,7 @@ export async function saveUserPreferencesToFirestore(
     alarms: Alarm[];
     totalMinutesListened?: number;
     settings?: Record<string, unknown>;
+    stationPlaytimes?: Record<string, number>;
   },
   immediate = false
 ): Promise<void> {

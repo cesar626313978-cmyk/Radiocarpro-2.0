@@ -16,6 +16,7 @@ interface DiscoverViewProps {
   initialStations?: RadioStation[];
   onInstallPWA?: () => void;
   isInstallable?: boolean;
+  failedStationIds?: string[];
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -44,6 +45,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   initialStations = [],
   onInstallPWA,
   isInstallable,
+  failedStationIds = [],
 }) => {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,10 +116,15 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
     };
   }, [searchQuery, initialStations]);
 
-  // Prioritize user favorites at the top of the search/browse results
+  // Prioritize user favorites at the top, and put failed stations at the absolute bottom
   const sortedStations = useMemo(() => {
     const list = [...stations];
     list.sort((a, b) => {
+      const aIsFailed = failedStationIds.includes(a.id) ? 1 : 0;
+      const bIsFailed = failedStationIds.includes(b.id) ? 1 : 0;
+      if (aIsFailed !== bIsFailed) {
+        return aIsFailed - bIsFailed; // Non-failed first, failed last
+      }
       const aIsFav = favorites.includes(a.id) ? 1 : 0;
       const bIsFav = favorites.includes(b.id) ? 1 : 0;
       if (aIsFav !== bIsFav) {
@@ -126,7 +133,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
       return 0; // maintain vote/relevance order
     });
     return list;
-  }, [stations, favorites]);
+  }, [stations, favorites, failedStationIds]);
 
   const handleClearFilters = () => {
     setSearchQuery('');

@@ -53,6 +53,33 @@ const getFavObjsStorageKey = (userId?: string | null) =>
 export default function App() {
   const [stations, setStations] = useState<RadioStation[]>(INITIAL_STATIONS);
   const [currentStation, setCurrentStation] = useState<RadioStation>(INITIAL_STATIONS[0]);
+  const currentStationRef = useRef<RadioStation>(INITIAL_STATIONS[0]);
+  useEffect(() => {
+    currentStationRef.current = currentStation;
+  }, [currentStation]);
+
+  const [failedStationIds, setFailedStationIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('radiostream_failed_stations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  const [stationPlaytimes, setStationPlaytimes] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('radiostream_station_playtimes');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return {};
+  });
+
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackStatus, setPlaybackStatus] = useState<PlaybackStatus>('idle');
   const [playbackError, setPlaybackError] = useState<string>('');
@@ -274,6 +301,55 @@ export default function App() {
     return {};
   });
 
+  // Increment listening time for current station when playing
+  useEffect(() => {
+    if (!isPlaying || activeSource !== 'radio' || !currentStation?.id) return;
+
+    const interval = setInterval(() => {
+      setStationPlaytimes(prev => {
+        if (!currentStation?.id) return prev;
+        const currentId = currentStation.id;
+        const currentVal = prev[currentId] || 0;
+        const next = {
+          ...prev,
+          [currentId]: currentVal + 1,
+        };
+        try {
+          localStorage.setItem('radiostream_station_playtimes', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, activeSource, currentStation?.id]);
+
+  // Periodic sync of playtimes to Firestore (every 20 seconds, or on pause)
+  useEffect(() => {
+    const currentUserId = user?.uid;
+    if (!currentUserId || isInitialUserLoadRef.current || isIncomingUpdateRef.current) return;
+
+    const syncToCloud = () => {
+      const favObjects = Object.values(favoriteStationsMap) as RadioStation[];
+      if (auth.currentUser && auth.currentUser.uid === currentUserId) {
+        saveUserPreferencesToFirestore(currentUserId, {
+          favorites,
+          favoriteStationObjects: favObjects,
+          alarms: EMPTY_ALARMS,
+          settings: userSettings,
+          stationPlaytimes,
+        }).catch(() => {});
+      }
+    };
+
+    if (!isPlaying) {
+      syncToCloud();
+    } else {
+      const timer = setTimeout(syncToCloud, 20000);
+      return () => clearTimeout(timer);
+    }
+  }, [isPlaying, stationPlaytimes, user?.uid, favorites, favoriteStationsMap, userSettings]);
+
   const nextStationRef = useRef<() => void>(() => {});
   const prevStationRef = useRef<() => void>(() => {});
 
@@ -293,9 +369,31 @@ export default function App() {
       if (status === 'playing') {
         setIsPlaying(true);
         setPlaybackError('');
+        if (currentStationRef.current?.id) {
+          const sid = currentStationRef.current.id;
+          setFailedStationIds(prev => {
+            if (!prev.includes(sid)) return prev;
+            const next = prev.filter(id => id !== sid);
+            try {
+              localStorage.setItem('radiostream_failed_stations', JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+        }
       } else if (status === 'error') {
         setIsPlaying(false);
         setPlaybackError(errorMsg || 'Emisora no disponible');
+        if (currentStationRef.current?.id) {
+          const sid = currentStationRef.current.id;
+          setFailedStationIds(prev => {
+            if (prev.includes(sid)) return prev;
+            const next = [...prev, sid];
+            try {
+              localStorage.setItem('radiostream_failed_stations', JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+        }
       } else if (status === 'idle') {
         setIsPlaying(false);
       }
@@ -379,6 +477,16 @@ export default function App() {
       const remoteData = await loadUserPreferencesFromFirestore(userId);
       const remoteFavs = (remoteData && Array.isArray(remoteData.favorites)) ? remoteData.favorites : [];
 
+      // Merge local and remote station play times
+      let mergedPlaytimes = { ...stationPlaytimes };
+      if (remoteData?.stationPlaytimes) {
+        mergedPlaytimes = { ...mergedPlaytimes, ...remoteData.stationPlaytimes };
+        setStationPlaytimes(mergedPlaytimes);
+        try {
+          localStorage.setItem('radiostream_station_playtimes', JSON.stringify(mergedPlaytimes));
+        } catch {}
+      }
+
       // Apply synchronized remote settings across devices
       if (remoteData?.settings) {
         applyRemoteSettings(remoteData.settings);
@@ -439,6 +547,7 @@ export default function App() {
           favorites: mergedFavorites,
           favoriteStationObjects: favObjectsArray,
           alarms: remoteData?.alarms || EMPTY_ALARMS,
+          stationPlaytimes: mergedPlaytimes,
         },
         true
       );
@@ -554,6 +663,15 @@ export default function App() {
       if (data && data.settings) {
         applyRemoteSettings(data.settings);
       }
+      if (data && data.stationPlaytimes) {
+        setStationPlaytimes(prev => {
+          const merged = { ...prev, ...data.stationPlaytimes };
+          try {
+            localStorage.setItem('radiostream_station_playtimes', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
       if (data && Array.isArray(data.favorites)) {
         isIncomingUpdateRef.current = true;
         setFavorites(data.favorites);
@@ -626,6 +744,7 @@ export default function App() {
           favoriteStationObjects: favObjects,
           alarms: EMPTY_ALARMS,
           settings: userSettings,
+          stationPlaytimes,
         }).catch(err => console.warn('Firestore sync direct notice:', err));
       }
 
@@ -634,7 +753,8 @@ export default function App() {
           favorites,
           favoriteStationObjects: favObjects,
           settings: userSettings,
-        })
+          stationPlaytimes,
+        } as any)
         .catch(err => console.warn('Tesla paired sync notice:', err));
     }
   }, [favorites, favoriteStationsMap, user?.uid]);
@@ -791,16 +911,36 @@ export default function App() {
   };
 
   const handlePrevStation = () => {
-    const list = favoriteStationObjects.length > 0 ? favoriteStationObjects : stations;
+    let list = favoriteStationObjects.length > 0 ? favoriteStationObjects : stations;
     if (list.length === 0) return;
+    list = [...list].sort((a, b) => {
+      const aIsFailed = failedStationIds.includes(a.id) ? 1 : 0;
+      const bIsFailed = failedStationIds.includes(b.id) ? 1 : 0;
+      if (aIsFailed !== bIsFailed) {
+        return aIsFailed - bIsFailed;
+      }
+      const aTime = stationPlaytimes[a.id] || 0;
+      const bTime = stationPlaytimes[b.id] || 0;
+      return bTime - aTime;
+    });
     const currentIndex = list.findIndex(s => s.id === currentStation.id);
     const prevIndex = currentIndex > 0 ? currentIndex - 1 : list.length - 1;
     handleTuneToStation(list[prevIndex]);
   };
 
   const handleNextStation = () => {
-    const list = favoriteStationObjects.length > 0 ? favoriteStationObjects : stations;
+    let list = favoriteStationObjects.length > 0 ? favoriteStationObjects : stations;
     if (list.length === 0) return;
+    list = [...list].sort((a, b) => {
+      const aIsFailed = failedStationIds.includes(a.id) ? 1 : 0;
+      const bIsFailed = failedStationIds.includes(b.id) ? 1 : 0;
+      if (aIsFailed !== bIsFailed) {
+        return aIsFailed - bIsFailed;
+      }
+      const aTime = stationPlaytimes[a.id] || 0;
+      const bTime = stationPlaytimes[b.id] || 0;
+      return bTime - aTime;
+    });
     const currentIndex = list.findIndex(s => s.id === currentStation.id);
     const nextIndex = currentIndex !== -1 && currentIndex < list.length - 1 ? currentIndex + 1 : 0;
     handleTuneToStation(list[nextIndex]);
@@ -888,7 +1028,7 @@ export default function App() {
   };
 
   const favoriteStationObjects = useMemo(() => {
-    return favorites
+    const list = favorites
       .map(id => {
         return (
           favoriteStationsMap[id] ||
@@ -897,7 +1037,18 @@ export default function App() {
         );
       })
       .filter((s): s is RadioStation => Boolean(s));
-  }, [favorites, favoriteStationsMap, stations]);
+
+    return [...list].sort((a, b) => {
+      const aIsFailed = failedStationIds.includes(a.id) ? 1 : 0;
+      const bIsFailed = failedStationIds.includes(b.id) ? 1 : 0;
+      if (aIsFailed !== bIsFailed) {
+        return aIsFailed - bIsFailed;
+      }
+      const aTime = stationPlaytimes[a.id] || 0;
+      const bTime = stationPlaytimes[b.id] || 0;
+      return bTime - aTime; // De más escuchadas a menos (descendente)
+    });
+  }, [favorites, favoriteStationsMap, stations, failedStationIds, stationPlaytimes]);
 
   // Synchronize favorites array IDs with valid station objects so counts never desync
   useEffect(() => {
@@ -978,6 +1129,8 @@ export default function App() {
               initialStations={stations}
               onInstallPWA={handleInstallPWA}
               isInstallable={isInstallable}
+              failedStationIds={failedStationIds}
+              stationPlaytimes={stationPlaytimes}
             />
           </div>
 
@@ -1021,6 +1174,7 @@ export default function App() {
           currentDriveTrack={currentDriveTrack}
           isPlaying={isPlaying}
           playbackStatus={activeSource === 'drive' ? drivePlaybackStatus : playbackStatus}
+          errorMessage={playbackError}
           onTogglePlay={handleTogglePlay}
           onNext={() => {
             if (activeSource === 'drive') {

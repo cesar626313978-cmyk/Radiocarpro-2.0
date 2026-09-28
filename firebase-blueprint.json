@@ -41,6 +41,10 @@
           "type": "object",
           "description": "User settings such as buffer size, language, fade-out time"
         },
+        "stationPlaytimes": {
+          "type": "object",
+          "description": "Object mapping station IDs to listening duration in seconds"
+        },
         "updatedAt": {
           "type": "string",
           "description": "ISO timestamp of last update"
