@@ -1018,32 +1018,9 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   )}
                 </div>
 
-                {/* 6. UTILITY CONTROLS: [ Privacidad ] [ Audio Coche ] (Integrated side-by-side in wide lower-mid section) */}
-                <div className="flex items-center justify-center gap-1 xs:gap-2 sm:gap-3 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowPrivacyModal(true)}
-                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
-                    title={t.privacy.title}
-                  >
-                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-cyan-400">verified_user</span>
-                    <span>{t.carMode.privacy}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowCarAudioTip(true)}
-                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
-                    title={t.carMode.carAudioTitle}
-                  >
-                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-amber-400">volume_up</span>
-                    <span>{t.carMode.carAudio}</span>
-                  </button>
-                </div>
-
-                {/* 7. VOLUME SLIDER POD */}
+                {/* 6. VOLUME SLIDER POD (Swapped: Now above utility buttons, identical size) */}
                 <div 
-                  className="w-[80%] xs:w-[84%] sm:w-[88%] max-w-[210px] xs:max-w-[250px] sm:max-w-[280px] flex items-center justify-between gap-1 xs:gap-1.5 sm:gap-2 px-2 xs:px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0 mb-0.5 sm:mb-1"
+                  className="w-[80%] xs:w-[84%] sm:w-[88%] max-w-[210px] xs:max-w-[250px] sm:max-w-[280px] flex items-center justify-between gap-1 xs:gap-1.5 sm:gap-2 px-2 xs:px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0"
                   onPointerDown={(e) => e.stopPropagation()}
                 >
                   {/* Speaker Mute/Unmute */}
@@ -1116,6 +1093,29 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <span className="text-[9px] xs:text-[10px] sm:text-xs font-mono font-bold text-cyan-300 w-7 sm:w-8 text-right shrink-0">
                     {Math.round(volume * 100)}%
                   </span>
+                </div>
+
+                {/* 7. UTILITY CONTROLS: [ Privacidad ] [ Audio Coche ] (Swapped: Now below volume slider, identical size) */}
+                <div className="flex items-center justify-center gap-1 xs:gap-2 sm:gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowPrivacyModal(true)}
+                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
+                    title={t.privacy.title}
+                  >
+                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-cyan-400">verified_user</span>
+                    <span>{t.carMode.privacy}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCarAudioTip(true)}
+                    className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
+                    title={t.carMode.carAudioTitle}
+                  >
+                    <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-amber-400">volume_up</span>
+                    <span>{t.carMode.carAudio}</span>
+                  </button>
                 </div>
 
                 {/* 8. BOTTOM "PISTAS (X)" OR "EMISORAS (X)" BUTTON */}
