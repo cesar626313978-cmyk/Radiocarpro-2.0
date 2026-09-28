@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { teslaPairingService, TeslaPairingData } from '../services/teslaPairingService';
 import { signInWithGoogle, isTeslaBrowser } from '../services/firebase';
 import { googleDriveService } from '../services/googleDriveService';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface TeslaPairingModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
   onSuccess,
   userEmail,
 }) => {
+  const { t } = useTranslation();
   const [pairingCode, setPairingCode] = useState<string>('');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [pairUrl, setPairUrl] = useState<string>('');
@@ -131,13 +133,13 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-black uppercase tracking-tight text-white flex items-center gap-2">
-                Conectar Gmail & Google Drive
+                {t.pairing.title}
                 <span className="bg-[#4edea3] text-black text-[10px] font-mono-tech font-bold px-2 py-0.5 uppercase">
-                  Modo Coche Ready
+                  {t.pairing.carModeReady}
                 </span>
               </h2>
               <p className="font-mono-tech text-xs text-[#999]">
-                Solución optimizada para el navegador y pantalla del coche
+                {t.pairing.subtitle}
               </p>
             </div>
           </div>
@@ -158,7 +160,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
             }`}
           >
             <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
-            1. Vincular con Móvil (QR)
+            {t.pairing.qrTab}
           </button>
           <button
             onClick={() => setActiveTab('redirect')}
@@ -167,7 +169,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
             }`}
           >
             <span className="material-symbols-outlined text-sm">open_in_browser</span>
-            2. Redirección en esta pestaña
+            {t.pairing.redirectTab}
           </button>
           <button
             onClick={() => setActiveTab('manual')}
@@ -176,7 +178,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
             }`}
           >
             <span className="material-symbols-outlined text-sm">key</span>
-            3. Manual / Token
+            {t.pairing.manualTab}
           </button>
         </div>
 
@@ -185,8 +187,8 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
           <div className="bg-[#4edea3] text-black p-4 border-3 border-black neo-shadow flex items-center gap-3 animate-pulse">
             <span className="material-symbols-outlined text-3xl font-black">check_circle</span>
             <div>
-              <div className="font-black text-sm uppercase">¡Coche Vinculado Correctamente!</div>
-              <div className="font-mono-tech text-xs">Conectado a Google Drive con {pairedUser}. Sincronizando canciones...</div>
+              <div className="font-black text-sm uppercase">{t.pairing.pairedSuccess}</div>
+              <div className="font-mono-tech text-xs">{t.pairing.pairedWith} {pairedUser}. {t.pairing.syncingTracks}</div>
             </div>
           </div>
         )}
@@ -208,12 +210,12 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
                 <img src={qrDataUrl} alt="Escanear con el móvil" className="w-56 h-56 object-contain" />
               ) : (
                 <div className="w-56 h-56 bg-neutral-200 flex items-center justify-center text-black font-mono-tech text-xs">
-                  Generando QR...
+                  {t.common.loading}
                 </div>
               )}
               <div className="mt-2 text-center">
                 <span className="font-mono-tech text-[11px] text-black font-bold uppercase block tracking-wider">
-                  Código de pantalla
+                  {t.pairing.screenCode}
                 </span>
                 <span className="font-mono-tech text-xl text-black font-black tracking-widest bg-yellow-300 px-3 py-0.5 border border-black inline-block mt-0.5">
                   {pairingCode || '...'}
@@ -226,32 +228,32 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
               <div className="bg-[#1f1f1f] border-2 border-black p-3">
                 <div className="flex items-center gap-2 text-[#4edea3] font-bold text-xs uppercase mb-1 font-mono-tech">
                   <span className="material-symbols-outlined text-base">verified</span>
-                  ¿Por qué esta es la mejor opción en el coche?
+                  {t.pairing.whyBestOption}
                 </div>
                 <p className="font-mono-tech text-xs text-[#ccc] leading-relaxed">
-                  El navegador del coche suele bloquear o restringir las ventanas emergentes (popups) de Google al abrirlas en pestañas aisladas. Al escanear este código con tu teléfono móvil, tu cuenta se autoriza en <strong className="text-white">1 segundo</strong> y la música se activa de inmediato en la pantalla del coche.
+                  {t.pairing.whyBestOptionDesc}
                 </p>
               </div>
 
               <div className="flex flex-col gap-2 font-mono-tech text-xs">
                 <div className="flex items-start gap-2 bg-[#181818] p-2 border border-[#333]">
                   <span className="w-5 h-5 bg-[#4edea3] text-black font-black flex items-center justify-center text-[11px] shrink-0">1</span>
-                  <span>Apunta la cámara de tu móvil al código QR.</span>
+                  <span>{t.pairing.step1}</span>
                 </div>
                 <div className="flex items-start gap-2 bg-[#181818] p-2 border border-[#333]">
                   <span className="w-5 h-5 bg-[#4edea3] text-black font-black flex items-center justify-center text-[11px] shrink-0">2</span>
-                  <span>Toca el enlace en tu móvil y pulsa <strong className="text-[#4edea3]">"Autorizar en mi Coche"</strong>.</span>
+                  <span>{t.pairing.step2}</span>
                 </div>
                 <div className="flex items-start gap-2 bg-[#181818] p-2 border border-[#333]">
                   <span className="w-5 h-5 bg-[#4edea3] text-black font-black flex items-center justify-center text-[11px] shrink-0">3</span>
-                  <span>Esta pantalla se conectará automáticamente sin que tengas que teclear contraseñas en el coche.</span>
+                  <span>{t.pairing.step3}</span>
                 </div>
               </div>
 
               {isWaitingMobile && !pairedUser && (
                 <div className="flex items-center gap-2 text-xs font-mono-tech text-[#4edea3] mt-1 bg-[#10241a] p-2.5 border border-[#4edea3]/40">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#4edea3] animate-ping shrink-0"></span>
-                  <span>Esperando confirmación desde tu teléfono móvil...</span>
+                  <span>{t.pairing.waiting}</span>
                 </div>
               )}
             </div>
@@ -264,15 +266,15 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
             <div className="flex items-start gap-3">
               <span className="material-symbols-outlined text-[#06B6D4] text-3xl">open_in_browser</span>
               <div>
-                <h3 className="font-bold text-sm uppercase text-white">Redirección en la misma ventana</h3>
+                <h3 className="font-bold text-sm uppercase text-white">{t.pairing.directRedirectTitle}</h3>
                 <p className="font-mono-tech text-xs text-[#bbb] mt-1">
-                  En lugar de abrir una pestaña nueva (que en el navegador del coche puede quedar desconectada), este método navegará directamente en esta misma pestaña hacia la página oficial de Google y volverá automáticamente con tus canciones y favoritos cargados.
+                  {t.pairing.directRedirectDesc}
                 </p>
               </div>
             </div>
 
             <div className="p-3 bg-black/60 border border-[#333] font-mono-tech text-xs text-[#aaa]">
-              💡 <strong>Nota para conductores en el coche:</strong> Al regresar de Google, la aplicación guardará la sesión en el almacenamiento local para que no tengas que repetir este proceso cada vez que entres al coche.
+              💡 <strong>{t.pairing.driverNote}</strong>
             </div>
 
             <button
@@ -285,7 +287,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
                 <path fill="#000" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                 <path fill="#000" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
-              Iniciar sesión directa con Google
+              {t.pairing.signInDirectGoogle}
             </button>
           </div>
         )}
@@ -294,9 +296,9 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
         {activeTab === 'manual' && (
           <div className="flex flex-col gap-4 bg-[#1a1a1a] p-5 border-2 border-black">
             <div>
-              <h3 className="font-bold text-sm uppercase text-white">Acceso Manual por Token de Drive</h3>
+              <h3 className="font-bold text-sm uppercase text-white">{t.pairing.manualAccessTitle}</h3>
               <p className="font-mono-tech text-xs text-[#bbb] mt-1">
-                Si has obtenido un token de acceso temporal de Google OAuth o quieres introducirlo directamente:
+                {t.pairing.manualAccessDesc}
               </p>
             </div>
 
@@ -304,7 +306,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
               type="text"
               value={manualToken}
               onChange={e => setManualToken(e.target.value)}
-              placeholder="Pega aquí el OAuth Access Token (ya29....)"
+              placeholder={t.pairing.manualTokenPlaceholder}
               className="w-full bg-black border-2 border-[#444] px-3 py-2 text-xs font-mono-tech text-white focus:outline-none focus:border-[#8B5CF6]"
             />
 
@@ -313,16 +315,16 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
               className="neo-button bg-[#8B5CF6] text-white px-6 py-2.5 font-mono-tech text-xs font-bold uppercase flex items-center justify-center gap-2 hover:bg-[#7c3aed] cursor-pointer"
             >
               <span className="material-symbols-outlined text-sm">check</span>
-              Aplicar Token a Google Drive
+              {t.pairing.applyToken}
             </button>
           </div>
         )}
 
         {/* Footer */}
         <div className="border-t border-[#262626] pt-3 flex items-center justify-between text-[11px] font-mono-tech text-[#777]">
-          <span>RadioStream Car Edition • Compatible con Pantallas de Coche</span>
+          <span>{t.pairing.carEditionFooter}</span>
           <button onClick={onClose} className="text-[#aaa] hover:text-white underline cursor-pointer">
-            Cerrar ventana
+            {t.pairing.closeWindow}
           </button>
         </div>
       </div>

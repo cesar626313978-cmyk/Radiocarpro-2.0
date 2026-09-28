@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { RadioStation } from '../types/radio';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface TuningModalProps {
   station: RadioStation | null;
@@ -8,6 +9,7 @@ interface TuningModalProps {
 }
 
 export const TuningModal: React.FC<TuningModalProps> = ({ station, isOpen, onCancel }) => {
+  const { t } = useTranslation();
   const [barHeights, setBarHeights] = useState<number[]>([15, 35, 25, 60, 45, 85, 95, 75, 50, 65, 30, 20]);
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export const TuningModal: React.FC<TuningModalProps> = ({ station, isOpen, onCan
         {/* Station Frequency Display */}
         <div className="mt-4 flex flex-col items-center text-center gap-2">
           <h2 className="font-mono-tech text-2xl md:text-3xl font-black text-[#10B981] tracking-tighter uppercase animate-blinker">
-            SINTONIZANDO...
+            {t.tuning.tuning}
           </h2>
           <div className="text-sm font-bold text-white uppercase tracking-wider">
             {station.name}
@@ -90,7 +92,7 @@ export const TuningModal: React.FC<TuningModalProps> = ({ station, isOpen, onCan
             onClick={onCancel}
             className="neo-button bg-[#EF4444] text-white font-mono-tech text-sm font-bold px-10 py-3.5 border-3 border-black uppercase tracking-wider hover:bg-[#dc2626]"
           >
-            Cancelar
+            {t.tuning.cancel}
           </button>
         </div>
       </div>

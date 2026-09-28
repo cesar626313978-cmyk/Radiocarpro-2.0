@@ -1,5 +1,6 @@
 import React from 'react';
 import { TabType } from '../types/radio';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface BottomNavBarProps {
   currentTab: TabType;
@@ -7,11 +8,13 @@ interface BottomNavBarProps {
 }
 
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentTab, onSelectTab }) => {
+  const { t } = useTranslation();
+
   const tabs: { id: TabType; label: string; icon: string }[] = [
-    { id: 'descubrir', label: 'RADIO', icon: 'radio' },
-    { id: 'favoritas', label: 'FAVORITAS', icon: 'favorite' },
-    { id: 'drive', label: 'MUSIC', icon: 'folder_open' },
-    { id: 'coche', label: 'COCHE', icon: 'directions_car' },
+    { id: 'descubrir', label: t.nav.radio, icon: 'radio' },
+    { id: 'favoritas', label: t.nav.favorites, icon: 'favorite' },
+    { id: 'drive', label: t.nav.music, icon: 'folder_open' },
+    { id: 'coche', label: t.nav.carMode, icon: 'directions_car' },
   ];
 
   return (
@@ -22,7 +25,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentTab, onSelect
           <button
             key={tab.id}
             onClick={() => onSelectTab(tab.id)}
-            className={`flex flex-col items-center justify-center pt-1.5 pb-1 flex-1 transition-all relative ${
+            className={`flex flex-col items-center justify-center pt-1.5 pb-1 flex-1 transition-all relative cursor-pointer ${
               isActive
                 ? 'border-t-3 -mt-[3px] font-bold'
                 : 'text-[#bbcabf] hover:text-white'

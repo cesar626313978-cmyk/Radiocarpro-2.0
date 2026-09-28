@@ -1,5 +1,6 @@
 import React from 'react';
 import { RadioStation, PlaybackStatus } from '../types/radio';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface FavoritesViewProps {
   favoriteStations: RadioStation[];
@@ -27,6 +28,8 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   user = null,
   onLoginWithGoogle,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col gap-2.5 sm:gap-3.5 w-full">
       {/* Page Header (Minimalist & Compact) */}
@@ -39,7 +42,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             favorite
           </span>
           <h2 className="font-mono-tech text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-            Mis Favoritas
+            {t.favorites.title}
           </h2>
           <span className="text-[10px] font-mono-tech px-1.5 py-0.5 bg-[#1A1A1A] border border-black text-[#4edea3] font-bold">
             {favoriteStations.length}
@@ -50,20 +53,20 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
         {user ? (
           <div className="flex items-center gap-1.5 bg-[#1A1A1A] px-2.5 py-1 border border-black text-[10px] font-mono-tech text-[#4edea3] font-bold">
             <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
-            <span>Sincronizado con Gmail ({user.displayName || user.email?.split('@')[0] || 'Cuenta'})</span>
+            <span>{t.favorites.syncedWithGmail} ({user.displayName || user.email?.split('@')[0] || 'Cuenta'})</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 bg-[#1A1A1A] px-2 py-0.5 border border-black text-[10px] font-mono-tech text-[#bbcabf]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6]" />
-              <span>Guardadas en dispositivo local</span>
+              <span>{t.favorites.savedLocally}</span>
             </div>
             {onLoginWithGoogle && (
               <button
                 onClick={onLoginWithGoogle}
                 className="neo-button bg-white text-black px-2 py-0.5 font-mono-tech text-[10px] font-bold uppercase hover:bg-gray-200 cursor-pointer shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
               >
-                Sincronizar con Gmail
+                {t.favorites.syncWithGmail}
               </button>
             )}
           </div>
@@ -76,19 +79,19 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             favorite_border
           </span>
           <h3 className="font-black text-xl text-white uppercase mb-1">
-            No tienes emisoras favoritas aún
+            {t.favorites.emptyTitle}
           </h3>
           <p className="text-[#bbcabf] font-mono-tech text-xs max-w-md mb-6 leading-relaxed">
             {user
-              ? 'Explora el catálogo de emisoras de radio y haz clic en el corazón para guardarlas en tu cuenta y acceder a ellas desde tu móvil o tu coche.'
-              : 'Explora el catálogo de emisoras de radio y haz clic en el corazón para guardarlas aquí. Puedes acceder con Gmail para sincronizarlas en la nube.'}
+              ? t.favorites.emptyDescLoggedIn
+              : t.favorites.emptyDescLoggedOut}
           </p>
           <div className="flex items-center gap-3 flex-wrap justify-center">
             <button
               onClick={onNavigateToDiscover}
               className="neo-button bg-[#4edea3] text-[#003824] px-6 py-3 font-mono-tech text-xs font-black uppercase hover:bg-[#38c98e] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             >
-              Explorar Emisoras
+              {t.favorites.exploreStations}
             </button>
             {!user && onLoginWithGoogle && (
               <button
@@ -101,7 +104,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
                 </svg>
-                Acceder con Gmail
+                {t.topBar.loginWithGmail}
               </button>
             )}
           </div>
@@ -134,20 +137,20 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                       playbackStatus === 'buffering' ? (
                         <span className="inline-flex items-center gap-1 text-[#F59E0B] font-black uppercase text-[10px]">
                           <span className="w-2 h-2 rounded-full bg-[#F59E0B] animate-ping" />
-                          Conectando...
+                          {t.discover.buffering}
                         </span>
                       ) : playbackStatus === 'error' ? (
                         <span className="inline-flex items-center gap-1 text-[#EF4444] font-black uppercase text-[10px]">
                           <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
-                          No disponible
+                          {t.discover.unavailable}
                         </span>
                       ) : isPlaying ? (
                         <span className="inline-flex items-center gap-1 text-[#4edea3] font-black uppercase text-[10px]">
                           <span className="w-2 h-2 rounded-full bg-[#4edea3] animate-pulse" />
-                          En Directo
+                          {t.discover.nowPlaying}
                         </span>
                       ) : (
-                        <span className="text-[#bbcabf] text-[10px] font-bold">PAUSADA</span>
+                        <span className="text-[#bbcabf] text-[10px] font-bold">{t.discover.paused}</span>
                       )
                     ) : (
                       <span className="text-[#bbcabf] text-[10px] uppercase font-bold">
@@ -163,7 +166,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                       onToggleFavorite(station.id, station);
                     }}
                     className="text-[#EF4444] hover:text-white p-1 cursor-pointer transition-colors"
-                    title="Quitar de favoritas"
+                    title={t.favorites.removeFavorite}
                   >
                     <span
                       className="material-symbols-outlined text-lg text-[#EF4444]"
@@ -231,21 +234,21 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                     }}
                     title={
                       isCurrent && isPlaying
-                        ? 'Pausar emisión'
+                        ? t.favorites.pauseStream
                         : isCurrent && playbackStatus === 'buffering'
-                        ? 'Conectando...'
+                        ? t.discover.buffering
                         : isCurrent && playbackStatus === 'error'
-                        ? 'Reintentar sintonización'
-                        : 'Sintonizar'
+                        ? t.favorites.retryTune
+                        : t.favorites.tune
                     }
                     aria-label={
                       isCurrent && isPlaying
-                        ? 'Pausar emisión'
+                        ? t.favorites.pauseStream
                         : isCurrent && playbackStatus === 'buffering'
-                        ? 'Conectando...'
+                        ? t.discover.buffering
                         : isCurrent && playbackStatus === 'error'
-                        ? 'Reintentar sintonización'
-                        : 'Sintonizar'
+                        ? t.favorites.retryTune
+                        : t.favorites.tune
                     }
                     className={`w-11 h-7 sm:w-12 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
                       isCurrent && isPlaying

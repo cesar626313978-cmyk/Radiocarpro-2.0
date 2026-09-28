@@ -2,6 +2,7 @@ import React from 'react';
 import { RadioStation, PlaybackStatus } from '../types/radio';
 import { DriveAudioFile, DrivePlaybackStatus } from '../types/drive';
 import { motion } from 'motion/react';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface GlobalPlayerBarProps {
   activeSource: 'radio' | 'drive';
@@ -40,6 +41,7 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
   isFavorite,
   onToggleFavorite,
 }) => {
+  const { t } = useTranslation();
   const isDrive = activeSource === 'drive';
 
   if (!isDrive && !currentStation) return null;
@@ -70,14 +72,14 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
         <div className="flex-1 min-w-0 flex flex-col justify-center">
           <div className="flex items-center gap-1.5 sm:gap-2">
             <h4 className="font-bold text-xs sm:text-sm md:text-base text-white truncate">
-              {isDrive ? (currentDriveTrack?.name || 'Música de Google Drive') : currentStation?.name}
+              {isDrive ? (currentDriveTrack?.name || t.player.googleDriveMusic) : currentStation?.name}
             </h4>
             {!isDrive && currentStation && (
               <button
                 type="button"
                 onClick={() => onToggleFavorite(currentStation.id, currentStation)}
                 className="text-[#bbcabf] hover:text-[#EF4444] transition-colors cursor-pointer shrink-0 p-0.5"
-                title={isFavorite ? 'Quitar de favoritas' : 'Añadir a favoritas'}
+                title={isFavorite ? t.player.removeFromFavorites : t.player.addToFavorites}
               >
                 <span
                   className={`material-symbols-outlined text-sm sm:text-base ${
@@ -99,12 +101,12 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
             ) : playbackStatus === 'buffering' ? (
               <span className="text-[#F59E0B] font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-ping" />
-                Conectando...
+                {t.player.connecting}
               </span>
             ) : playbackStatus === 'error' ? (
               <span className="text-[#EF4444] font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
-                {errorMessage || 'No disponible'}
+                {errorMessage || t.player.standby}
               </span>
             ) : playbackStatus === 'playing' ? (
               <span className="text-[#bbcabf] truncate">
@@ -112,7 +114,7 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
                 {currentStation?.currentTrack || `${currentStation?.genre || 'Radio'}`}
               </span>
             ) : (
-              <span className="text-[#bbcabf]">PAUSADO</span>
+              <span className="text-[#bbcabf]">{t.player.paused}</span>
             )}
           </div>
         </div>
@@ -125,7 +127,7 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
           onClick={isDrive ? onDrivePrev : onPrevStation}
           whileTap={{ scale: 0.9, y: 2 }}
           className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-xl bg-white/5 hover:bg-white/10 border border-white/20 text-white flex items-center justify-center cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.6)] transition-all shrink-0"
-          title={isDrive ? 'Pista anterior' : 'Emisora anterior'}
+          title={isDrive ? t.player.prev : t.player.prevStation}
         >
           <span className="material-symbols-outlined text-lg sm:text-xl md:text-2xl text-white">skip_previous</span>
         </motion.button>
@@ -135,7 +137,7 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
           onClick={onTogglePlay}
           whileTap={{ scale: 0.93, y: 2 }}
           className="w-11 h-11 sm:w-13 sm:h-13 md:w-14 md:h-14 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-[0_8px_25px_rgba(0,0,0,0.7)] bg-gradient-to-br from-[#4edea3] via-[#38c98e] to-[#059669] text-black border-2 border-[#022c22] shrink-0"
-          title={isPlaying ? 'Pausar' : 'Reproducir'}
+          title={isPlaying ? t.player.pause : t.player.play}
         >
           <span
             className="material-symbols-outlined text-2xl sm:text-3xl md:text-4xl font-black drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
@@ -150,7 +152,7 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
           onClick={isDrive ? onDriveNext : onNextStation}
           whileTap={{ scale: 0.9, y: 2 }}
           className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-xl bg-white/5 hover:bg-white/10 border border-white/20 text-white flex items-center justify-center cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.6)] transition-all shrink-0"
-          title={isDrive ? 'Pista siguiente' : 'Emisora siguiente'}
+          title={isDrive ? t.player.next : t.player.nextStation}
         >
           <span className="material-symbols-outlined text-lg sm:text-xl md:text-2xl text-white">skip_next</span>
         </motion.button>
@@ -162,8 +164,8 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
           type="button"
           onClick={() => onVolumeChange(volume > 0 ? 0 : 0.8)}
           className="text-[#bbcabf] hover:text-white cursor-pointer p-1 transition-colors flex items-center justify-center shrink-0"
-          title={volume === 0 ? 'Activar sonido' : 'Silenciar'}
-          aria-label={volume === 0 ? 'Activar sonido' : 'Silenciar'}
+          title={volume === 0 ? t.player.unmute : t.player.mute}
+          aria-label={volume === 0 ? t.player.unmute : t.player.mute}
         >
           <span className="material-symbols-outlined text-lg sm:text-xl md:text-2xl text-[#4edea3]">
             {volume === 0 ? 'volume_off' : volume < 0.5 ? 'volume_down' : 'volume_up'}
@@ -182,8 +184,8 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
             value={volume}
             onChange={e => onVolumeChange(parseFloat(e.target.value))}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            title={`Volumen: ${Math.round(volume * 100)}%`}
-            aria-label="Control de volumen"
+            title={`${t.player.volume}: ${Math.round(volume * 100)}%`}
+            aria-label={t.player.volume}
           />
         </div>
         <span className="font-mono-tech text-[10px] sm:text-xs text-[#bbcabf] w-7 text-right select-none hidden lg:inline shrink-0">

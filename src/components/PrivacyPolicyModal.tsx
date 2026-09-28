@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface PrivacyPolicyModalProps {
   isOpen: boolean;
@@ -7,7 +8,10 @@ interface PrivacyPolicyModalProps {
 }
 
 export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, onClose }) => {
+  const { lang, t } = useTranslation();
   if (!isOpen) return null;
+
+  const isEn = lang === 'EN';
 
   return (
     <AnimatePresence>
@@ -27,17 +31,17 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
               </div>
               <div>
                 <h2 className="text-sm sm:text-base font-black tracking-wider uppercase text-cyan-100">
-                  Política de Privacidad y Seguridad
+                  {isEn ? 'Privacy & Security Policy' : 'Política de Privacidad y Seguridad'}
                 </h2>
                 <p className="text-[10px] sm:text-xs text-cyan-400/80 font-mono">
-                  Myradio Pro 2.0 • Modo Coche y Streaming
+                  {isEn ? 'Myradio Pro 2.0 • Car Mode & Streaming' : 'Myradio Pro 2.0 • Modo Coche y Streaming'}
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 border border-white/20 flex items-center justify-center text-gray-300 hover:text-white transition-all cursor-pointer"
-              title="Cerrar"
+              title={t.common.close}
             >
               <span className="material-symbols-outlined text-lg">close</span>
             </button>
@@ -49,15 +53,17 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
             <div className="bg-black/30 border border-cyan-500/20 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm uppercase tracking-wide">
                 <span className="material-symbols-outlined text-base">cloud_download</span>
-                <span>1. Acceso Estricto a Google Drive</span>
+                <span>{isEn ? '1. Strict Google Drive Access' : '1. Acceso Estricto a Google Drive'}</span>
               </div>
               <p className="text-gray-300 text-xs">
-                La integración con Google Drive utiliza exclusivamente el permiso de solo lectura (<code className="text-cyan-300 bg-cyan-950/60 px-1.5 py-0.5 rounded font-mono">drive.readonly</code>) para acceder a los archivos de audio contenidos en tu carpeta <strong className="text-white font-semibold">/mimusica</strong>.
+                {isEn
+                  ? 'Google Drive integration strictly uses read-only permission (drive.readonly) to access audio files inside your /mimusica folder.'
+                  : 'La integración con Google Drive utiliza exclusivamente el permiso de solo lectura (drive.readonly) para acceder a los archivos de audio contenidos en tu carpeta /mimusica.'}
               </p>
               <ul className="list-disc pl-5 space-y-1 text-[11px] sm:text-xs text-gray-400">
-                <li><strong className="text-gray-200">Sin servidores intermedios:</strong> El audio se descarga directamente entre los servidores de Google y tu navegador mediante canal HTTPS cifrado.</li>
-                <li><strong className="text-gray-200">Sin modificación ni borrado:</strong> La aplicación no tiene permisos de escritura, modificación ni eliminación sobre tus archivos.</li>
-                <li><strong className="text-gray-200">Aislamiento total:</strong> No accedemos a documentos, fotos ni ningún otro dato personal fuera de la carpeta musical autorizada.</li>
+                <li><strong className="text-gray-200">{isEn ? 'No intermediate servers:' : 'Sin servidores intermedios:'}</strong> {isEn ? 'Audio streams directly between Google servers and your browser over encrypted HTTPS.' : 'El audio se descarga directamente entre los servidores de Google y tu navegador mediante canal HTTPS cifrado.'}</li>
+                <li><strong className="text-gray-200">{isEn ? 'No modification or deletion:' : 'Sin modificación ni borrado:'}</strong> {isEn ? 'The application has no write, edit, or delete permissions over your files.' : 'La aplicación no tiene permisos de escritura, modificación ni eliminación sobre tus archivos.'}</li>
+                <li><strong className="text-gray-200">{isEn ? 'Total isolation:' : 'Aislamiento total:'}</strong> {isEn ? 'We never access documents, photos, or any other personal data outside the authorized music folder.' : 'No accedemos a documentos, fotos ni ningún otro dato personal fuera de la carpeta musical autorizada.'}</li>
               </ul>
             </div>
 
@@ -65,13 +71,17 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
             <div className="bg-black/30 border border-cyan-500/20 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm uppercase tracking-wide">
                 <span className="material-symbols-outlined text-base">save</span>
-                <span>2. Almacenamiento Local y Búfer Coche (IndexedDB)</span>
+                <span>{isEn ? '2. Local Storage & Car Buffer (IndexedDB)' : '2. Almacenamiento Local y Búfer Coche (IndexedDB)'}</span>
               </div>
               <p className="text-gray-300 text-xs">
-                Para evitar microcortes al circular por túneles o zonas con baja cobertura móvil, las canciones y emisoras activas se almacenan temporalmente en la base de datos local <strong className="text-white font-semibold">IndexedDB</strong> de tu propio navegador.
+                {isEn
+                  ? 'To prevent cutouts in tunnels or low cellular reception zones, active songs and stations are temporarily cached in your browser IndexedDB.'
+                  : 'Para evitar microcortes al circular por túneles o zonas con baja cobertura móvil, las canciones y emisoras activas se almacenan temporalmente en la base de datos local IndexedDB de tu propio navegador.'}
               </p>
               <p className="text-[11px] sm:text-xs text-gray-400">
-                Estos datos nunca salen de tu coche o dispositivo y pueden borrarse en cualquier momento cerrando sesión o limpiando la caché de la aplicación.
+                {isEn
+                  ? 'This data never leaves your device and can be cleared anytime by logging out or resetting app cache.'
+                  : 'Estos datos nunca salen de tu coche o dispositivo y pueden borrarse en cualquier momento cerrando sesión o limpiando la caché de la aplicación.'}
               </p>
             </div>
 
@@ -79,15 +89,17 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
             <div className="bg-black/30 border border-cyan-500/20 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm uppercase tracking-wide">
                 <span className="material-symbols-outlined text-base">sync</span>
-                <span>3. Sincronización en la Nube (Firebase Firestore)</span>
+                <span>{isEn ? '3. Cloud Synchronization (Firebase Firestore)' : '3. Sincronización en la Nube (Firebase Firestore)'}</span>
               </div>
               <p className="text-gray-300 text-xs">
-                Si inicias sesión con tu cuenta de Google o vinculas tu vehículo mediante código QR del coche, almacenamos de forma cifrada en la base de datos Firestore únicamente:
+                {isEn
+                  ? 'If you sign in with Google or pair your car via QR code, we only store encrypted in Firestore database:'
+                  : 'Si inicias sesión con tu cuenta de Google o vinculas tu vehículo mediante código QR del coche, almacenamos de forma cifrada en la base de datos Firestore únicamente:'}
               </p>
               <ul className="list-disc pl-5 space-y-1 text-[11px] sm:text-xs text-gray-400">
-                <li>Tu identificador único de usuario y correo electrónico de cuenta.</li>
-                <li>Tu lista de emisoras de radio favoritas y preferencias de audio para sincronizarlas entre tu móvil y tu coche.</li>
-                <li><strong className="text-emerald-400">Nunca</strong> solicitamos ni almacenamos contraseñas, medios de pago ni información financiera.</li>
+                <li>{isEn ? 'Your unique user ID and account email.' : 'Tu identificador único de usuario y correo electrónico de cuenta.'}</li>
+                <li>{isEn ? 'Your favorite radio station list and audio preferences synced between phone and car.' : 'Tu lista de emisoras de radio favoritas y preferencias de audio para sincronizarlas entre tu móvil y tu coche.'}</li>
+                <li><strong className="text-emerald-400">{isEn ? 'Never' : 'Nunca'}</strong> {isEn ? 'do we ask for or store passwords or payment methods.' : 'solicitamos ni almacenamos contraseñas, medios de pago ni información financiera.'}</li>
               </ul>
             </div>
 
@@ -95,10 +107,12 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
             <div className="bg-black/30 border border-cyan-500/20 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm uppercase tracking-wide">
                 <span className="material-symbols-outlined text-base">directions_car</span>
-                <span>4. Reproducción Segura en el Coche y Segundo Plano</span>
+                <span>{isEn ? '4. Safe Car Playback & Background Audio' : '4. Reproducción Segura en el Coche y Segundo Plano'}</span>
               </div>
               <p className="text-gray-300 text-xs">
-                La aplicación implementa las tecnologías estándar <strong className="text-white font-semibold">MediaSession API</strong> y <strong className="text-white font-semibold">Screen WakeLock</strong> para permitir el control de avance/retroceso desde los mandos del volante del vehículo y mantener la reproducción activa cuando la pantalla conmuta al navegador GPS.
+                {isEn
+                  ? 'The app implements standard MediaSession API and Screen WakeLock to enable steering wheel button control and keep playback seamless while using GPS navigation.'
+                  : 'La aplicación implementa las tecnologías estándar MediaSession API y Screen WakeLock para permitir el control de avance/retroceso desde los mandos del volante del vehículo y mantener la reproducción activa cuando la pantalla conmuta al navegador GPS.'}
               </p>
             </div>
 
@@ -106,10 +120,12 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
             <div className="bg-black/30 border border-cyan-500/20 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm uppercase tracking-wide">
                 <span className="material-symbols-outlined text-base">cookie_off</span>
-                <span>5. Cero Cookies Publicitarias ni Rastreo Comercial</span>
+                <span>{isEn ? '5. Zero Advertising Cookies or Commercial Tracking' : '5. Cero Cookies Publicitarias ni Rastreo Comercial'}</span>
               </div>
               <p className="text-gray-300 text-xs">
-                No comercializamos tus datos con anunciantes ni empleamos cookies de perfilado publicitario. Tu concentración al volante y la privacidad de tus reproducciones son nuestra prioridad absoluta.
+                {isEn
+                  ? 'We do not sell data to advertisers or use advertising tracking cookies. Your concentration while driving and playback privacy are our absolute priority.'
+                  : 'No comercializamos tus datos con anunciantes ni empleamos cookies de perfilado publicitario. Tu concentración al volante y la privacidad de tus reproducciones son nuestra prioridad absoluta.'}
               </p>
             </div>
           </div>
@@ -117,13 +133,13 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
           {/* Footer */}
           <div className="flex items-center justify-between px-5 py-3.5 border-t border-cyan-500/30 bg-black/60 backdrop-blur-md">
             <span className="text-[10px] text-cyan-400/70 font-mono">
-              Actualizado: Septiembre 2026 • Cumplimiento RGPD & Google API Services
+              {isEn ? 'Updated: 2026 • GDPR Compliance & Google API Services' : 'Actualizado: 2026 • Cumplimiento RGPD & Google API Services'}
             </span>
             <button
               onClick={onClose}
               className="px-5 py-2 rounded-full bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.6)] cursor-pointer transition-all"
             >
-              Entendido
+              {isEn ? 'Got it' : 'Entendido'}
             </button>
           </div>
         </motion.div>

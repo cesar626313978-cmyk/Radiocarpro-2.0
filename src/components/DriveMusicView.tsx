@@ -4,6 +4,7 @@ import { googleDriveService } from '../services/googleDriveService';
 import { driveAudioEngine } from '../services/driveAudioEngine';
 import { driveCacheService } from '../services/driveCacheService';
 import { User, isTeslaBrowser } from '../services/firebase';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface DriveMusicViewProps {
   onSwitchToRadio: () => void;
@@ -24,6 +25,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   onOpenTeslaPairing,
   onDisconnect,
 }) => {
+  const { t } = useTranslation();
   const triggerCarPairing = onOpenCarPairing || onOpenTeslaPairing;
   // Synchronous cache retrieval for instant 0ms rendering
   const cachedInitial = driveCacheService.getCachedLibrarySync();
@@ -549,23 +551,23 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="font-black text-xs sm:text-sm md:text-base text-white tracking-tight uppercase truncate">
-                Música en Google Drive (/mimusica)
+                {t.drive.title}
               </h1>
               {isAuthenticated ? (
                 <span className="bg-[#10B981] text-black text-[9px] sm:text-[10px] font-mono-tech font-bold px-1.5 py-0.5 border border-black uppercase shrink-0 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
-                  CONECTADO
+                  {t.drive.connected}
                 </span>
               ) : (
                 <span className="bg-[#f59e0b] text-black text-[9px] sm:text-[10px] font-mono-tech font-bold px-1.5 py-0.5 border border-black uppercase shrink-0">
-                  DESCONECTADO
+                  {t.drive.disconnected}
                 </span>
               )}
             </div>
             <p className="font-mono-tech text-[11px] text-[#bbcabf] truncate mt-0.5">
               {isAuthenticated
-                ? `${subfolders.length} carpetas • ${totalRecursiveFiles} canciones`
-                : 'Conecta Google Drive para reproducir tu música.'}
+                ? `${subfolders.length} ${t.drive.folders} • ${totalRecursiveFiles} ${t.drive.tracks}`
+                : t.drive.connectToPlay}
             </p>
           </div>
         </div>
@@ -579,10 +581,10 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 onClick={handleRefreshFolders}
                 disabled={isLoading}
                 className="neo-button bg-[#10B981] text-black px-2.5 sm:px-3 py-1.5 font-mono-tech text-[11px] font-black uppercase flex items-center gap-1 hover:bg-[#059669] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60"
-                title="Sincronizar carpetas y canciones de Google Drive"
+                title={t.drive.refresh}
               >
                 <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>sync</span>
-                <span>{isLoading ? 'Sincronizando...' : 'Actualizar'}</span>
+                <span>{isLoading ? t.drive.syncing : t.drive.refresh}</span>
               </button>
 
               <button
@@ -591,10 +593,10 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 className={`neo-button px-2.5 sm:px-3 py-1.5 font-mono-tech text-[11px] font-bold uppercase flex items-center gap-1 cursor-pointer border-2 border-black ${
                   showEq ? 'bg-[#F59E0B] text-black' : 'bg-[#201f1f] text-[#bbcabf] hover:text-white'
                 }`}
-                title="Ecualizador de audio"
+                title="EQ"
               >
                 <span className="material-symbols-outlined text-sm">equalizer</span>
-                <span>EQ</span>
+                <span>{t.drive.equalizer}</span>
               </button>
 
               <button
@@ -603,20 +605,20 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 className={`neo-button px-2.5 sm:px-3 py-1.5 font-mono-tech text-[11px] font-bold uppercase flex items-center gap-1 cursor-pointer border-2 border-black ${
                   showDriveGuide ? 'bg-[#4edea3] text-black' : 'bg-[#201f1f] text-[#bbcabf] hover:text-white'
                 }`}
-                title="Guía de organización de carpetas"
+                title="Guide"
               >
                 <span className="material-symbols-outlined text-sm">folder_special</span>
-                <span className="hidden md:inline">Guía</span>
+                <span className="hidden md:inline">{t.drive.guide}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleDisconnectDrive}
                 className="neo-button bg-[#262626] border-2 border-black hover:bg-[#dc2626] text-[#bbb] hover:text-white px-2.5 py-1.5 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 font-mono-tech text-[11px] font-bold"
-                title="Desconectar acceso a Google Drive"
+                title={t.drive.disconnectTitle}
               >
                 <span className="material-symbols-outlined text-sm">logout</span>
-                <span className="hidden md:inline">Desconectar</span>
+                <span className="hidden md:inline">{t.drive.disconnect}</span>
               </button>
             </>
           ) : null}
@@ -672,27 +674,27 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
           <div className="font-mono-tech text-xs font-bold text-white uppercase flex items-center justify-between border-b border-[#333] pb-2">
             <span className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[#F59E0B] text-base">equalizer</span>
-              Ecualizador Biquad (Web Audio API)
+              {t.drive.equalizerBiquad}
             </span>
             <button
               type="button"
               onClick={() => { setEqLow(0); setEqMid(0); setEqHigh(0); driveAudioEngine.setEqualizer(0,0,0); }}
               className="text-[10px] text-[#4edea3] underline hover:text-white"
             >
-              Resetear a 0dB
+              {t.drive.resetToZero}
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1">
-              <label className="font-mono-tech text-[10px] text-[#bbcabf]">Bajos 100Hz: {eqLow}dB</label>
+              <label className="font-mono-tech text-[10px] text-[#bbcabf]">{t.drive.bass} 100Hz: {eqLow}dB</label>
               <input type="range" min="-20" max="20" step="1" value={eqLow} onChange={e => handleEqChange('low', parseFloat(e.target.value))} className="accent-[#4edea3]" />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="font-mono-tech text-[10px] text-[#bbcabf]">Medios 1kHz: {eqMid}dB</label>
+              <label className="font-mono-tech text-[10px] text-[#bbcabf]">{t.drive.mid} 1kHz: {eqMid}dB</label>
               <input type="range" min="-20" max="20" step="1" value={eqMid} onChange={e => handleEqChange('mid', parseFloat(e.target.value))} className="accent-[#4edea3]" />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="font-mono-tech text-[10px] text-[#bbcabf]">Agudos 8kHz: {eqHigh}dB</label>
+              <label className="font-mono-tech text-[10px] text-[#bbcabf]">{t.drive.treble} 8kHz: {eqHigh}dB</label>
               <input type="range" min="-20" max="20" step="1" value={eqHigh} onChange={e => handleEqChange('high', parseFloat(e.target.value))} className="accent-[#4edea3]" />
             </div>
           </div>
@@ -705,7 +707,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
           <div className="flex items-center justify-between border-b border-[#2b2b2b] pb-2">
             <div className="flex items-center gap-2 text-[#4edea3] font-black text-xs uppercase font-mono-tech">
               <span className="material-symbols-outlined text-base">account_tree</span>
-              <span>Organización en Google Drive (/mimusica)</span>
+              <span>{t.drive.guideTitle}</span>
             </div>
             <button type="button" onClick={() => setShowDriveGuide(false)} className="text-gray-400 hover:text-white">
               <span className="material-symbols-outlined text-sm">close</span>
@@ -715,19 +717,19 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
             <div className="bg-[#1a1a1a] p-3 border border-[#333]">
               <div className="text-white font-bold mb-1 flex items-center gap-1.5">
                 <span className="w-4 h-4 bg-[#4edea3] text-black font-black flex items-center justify-center text-[10px]">1</span>
-                Carpeta raíz: <span className="text-[#4edea3]">/mimusica</span>
+                {t.drive.guideStep1}
               </div>
               <p className="text-[#bbb] text-[11px] leading-relaxed">
-                Crea una carpeta llamada <strong className="text-white">mimusica</strong> en la raíz de tu Google Drive. Se detecta automáticamente.
+                {t.drive.guideStep1Desc}
               </p>
             </div>
             <div className="bg-[#1a1a1a] p-3 border border-[#333]">
               <div className="text-white font-bold mb-1 flex items-center gap-1.5">
                 <span className="w-4 h-4 bg-[#06B6D4] text-black font-black flex items-center justify-center text-[10px]">2</span>
-                Subcarpetas = Listas de Reproducción
+                {t.drive.guideStep2}
               </div>
               <p className="text-[#bbb] text-[11px] leading-relaxed">
-                Cada subcarpeta dentro de <strong className="text-white">mimusica</strong> se convierte automáticamente en una lista o álbum navegable en este bloque.
+                {t.drive.guideStep2Desc}
               </p>
             </div>
           </div>
@@ -742,10 +744,10 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
           </div>
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
-              Tus Archivos de Música en Google Drive
+              {t.drive.title}
             </h2>
             <p className="font-mono-tech text-xs sm:text-sm text-[#bbcabf] max-w-lg mt-2 mx-auto leading-relaxed">
-              Conecta tu Google Drive para explorar y reproducir tu música organizada en carpetas (/mimusica) en una sola pantalla navegable y responsiva.
+              {t.drive.subtitle}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
@@ -758,7 +760,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               <span className={`material-symbols-outlined text-base ${isConnectingDrive ? 'animate-spin' : ''}`}>
                 {isConnectingDrive ? 'sync' : 'key'}
               </span>
-              <span>{isConnectingDrive ? 'Conectando...' : 'Conectar Google Drive'}</span>
+              <span>{isConnectingDrive ? t.drive.syncing : t.drive.connectDrive}</span>
             </button>
 
             {triggerCarPairing && (
@@ -768,7 +770,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 className="neo-button bg-[#8B5CF6] text-white px-6 py-3 font-mono-tech text-xs sm:text-sm font-bold uppercase flex items-center justify-center gap-2 hover:bg-[#7c3aed] cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] shrink-0 w-full sm:w-auto"
               >
                 <span className="material-symbols-outlined text-base">qr_code_scanner</span>
-                <span>Vincular con QR Móvil</span>
+                <span>{t.topBar.pairCar}</span>
               </button>
             )}
           </div>
@@ -810,7 +812,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 }`}
               >
                 <span className="material-symbols-outlined text-base">folder_open</span>
-                <span>Explorar Carpetas</span>
+                <span>{t.drive.folders}</span>
                 <span className="text-[10px] px-1.5 py-0.2 bg-black/60 text-[#bbcabf] border border-black tabular-nums">
                   {subfolders.length}
                 </span>
@@ -822,21 +824,21 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               <button
                 type="button"
                 onClick={() => handlePlayActiveFolder(false)}
-                title="Reproducir esta carpeta en orden"
+                title={t.player.play}
                 className="neo-button bg-gradient-to-b from-[#5af3b6] to-[#38c98e] text-[#003824] px-3 py-1.5 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:from-[#6df5c1] hover:to-[#43d499]"
               >
                 <span className="material-symbols-outlined text-base">play_arrow</span>
-                <span className="hidden xs:inline">Reproducir</span> Todo
+                <span className="hidden xs:inline">{t.player.play}</span> {t.common.all}
               </button>
 
               <button
                 type="button"
                 onClick={() => handlePlayActiveFolder(true)}
-                title="Reproducir esta carpeta en modo aleatorio"
+                title={t.carMode.mix}
                 className="neo-button bg-[#8B5CF6] text-white px-3 py-1.5 font-mono-tech text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-[#7c3aed]"
               >
                 <span className="material-symbols-outlined text-base">shuffle</span>
-                <span>Aleatorio</span>
+                <span>{t.carMode.mix}</span>
               </button>
             </div>
           </div>
@@ -848,7 +850,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <span className="material-symbols-outlined text-base text-[#4edea3] shrink-0">folder_open</span>
                 <span className="text-[11px] font-mono-tech font-bold uppercase text-[#bbcabf] shrink-0">
-                  Carpeta activa:
+                  {t.drive.activeFolder}
                 </span>
                 <div className="relative flex-1 min-w-0 max-w-full sm:max-w-md">
                   <select
@@ -861,18 +863,18 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                     className="w-full bg-[#1e1e1e] border-2 border-black text-[#4edea3] font-mono-tech text-xs font-bold uppercase py-1.5 pl-2.5 pr-8 outline-none cursor-pointer appearance-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:border-[#4edea3] transition-colors"
                   >
                     <option value="all" className="bg-[#1a1a1a] text-white">
-                      ⭐ TODAS LAS CANCIONES ({totalRecursiveFiles} pistas)
+                      ⭐ {t.drive.allTracksDropdown} ({totalRecursiveFiles} {t.drive.tracks})
                     </option>
                     {files.length > 0 && (
                       <option value="root" className="bg-[#1a1a1a] text-white">
-                        📁 RAÍZ /mimusica ({files.length} pistas)
+                        📁 {t.drive.rootFolder} ({files.length} {t.drive.tracks})
                       </option>
                     )}
                     {subfolders.map((sub) => {
                       const count = folderTrackCounts[sub.name.trim().toLowerCase()] || 0;
                       return (
                         <option key={sub.id} value={sub.id} className="bg-[#1a1a1a] text-white">
-                          📁 {sub.name.toUpperCase()} {count > 0 ? `(${count} pistas)` : ''}
+                          📁 {sub.name.toUpperCase()} {count > 0 ? `(${count} ${t.drive.tracks})` : ''}
                         </option>
                       );
                     })}
@@ -886,18 +888,18 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               {/* Botón para alternar a vista en cuadrícula de carpetas */}
               <div className="flex items-center gap-2 shrink-0 justify-end">
                 <span className="text-[10px] font-mono-tech text-[#888] uppercase hidden md:inline">
-                  {subfolders.length} carpetas
+                  {subfolders.length} {t.drive.folders}
                 </span>
                 <button
                   type="button"
                   onClick={() => setViewMode(v => v === 'folders' ? 'tracks' : 'folders')}
                   className="neo-button px-2.5 py-1 bg-[#201f1f] text-[#bbcabf] hover:text-white border-2 border-black font-mono-tech text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
-                  title="Ver todas las carpetas en cuadrícula amplia"
+                  title={t.drive.viewGrid}
                 >
                   <span className="material-symbols-outlined text-xs">
                     {viewMode === 'folders' ? 'view_list' : 'grid_view'}
                   </span>
-                  <span>{viewMode === 'folders' ? 'Ver pistas' : 'Ver cuadrícula'}</span>
+                  <span>{viewMode === 'folders' ? t.drive.viewTracks : t.drive.viewGrid}</span>
                 </button>
               </div>
             </div>
@@ -915,7 +917,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 }`}
               >
                 <span className="material-symbols-outlined text-xs sm:text-sm">queue_music</span>
-                <span>Todas</span>
+                <span>{t.common.all}</span>
                 <span className={`text-[9px] px-1 py-0 border border-black font-black tabular-nums ${
                   selectedFolderId === 'all' && viewMode === 'tracks' ? 'bg-black text-[#4edea3]' : 'bg-black/60 text-[#bbb]'
                 }`}>
@@ -935,7 +937,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                   }`}
                 >
                   <span className="material-symbols-outlined text-xs sm:text-sm">folder_open</span>
-                  <span>Raíz</span>
+                  <span>{t.drive.root}</span>
                   <span className={`text-[9px] px-1 py-0 border border-black font-black tabular-nums ${
                     selectedFolderId === 'root' && viewMode === 'tracks' ? 'bg-black text-[#4edea3]' : 'bg-black/60 text-[#bbb]'
                   }`}>
@@ -991,10 +993,10 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder={
                   viewMode === 'folders'
-                    ? 'Filtrar canciones...'
+                    ? t.drive.searchPlaceholder
                     : searchScope === 'all'
-                    ? 'Buscar en toda la música...'
-                    : `Buscar en "${selectedFolderName}"...`
+                    ? t.drive.searchAllPlaceholder
+                    : t.drive.searchCurrentPlaceholder
                 }
                 className="w-full bg-transparent font-mono-tech text-xs text-white placeholder-[#666] outline-none"
               />
@@ -1018,7 +1020,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                   searchScope === 'current' ? 'bg-[#4edea3] text-black font-black' : 'text-[#888] hover:text-white'
                 }`}
               >
-                Esta carpeta
+                {t.drive.scopeCurrent}
               </button>
               <button
                 type="button"
@@ -1027,7 +1029,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                   searchScope === 'all' ? 'bg-[#4edea3] text-black font-black' : 'text-[#888] hover:text-white'
                 }`}
               >
-                Toda la música
+                {t.drive.scopeAll}
               </button>
             </div>
           </div>
@@ -1044,7 +1046,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                     type="text"
                     value={folderSearchQuery}
                     onChange={e => setFolderSearchQuery(e.target.value)}
-                    placeholder="Filtrar carpetas por nombre..."
+                    placeholder={t.drive.filterFoldersPlaceholder}
                     className="w-full bg-transparent font-mono-tech text-xs text-white placeholder-[#666] outline-none"
                   />
                   {folderSearchQuery && (
@@ -1071,14 +1073,14 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-xs text-white uppercase break-words leading-snug group-hover:text-[#4edea3]">
-                        Todas las canciones
+                        {t.drive.allTracks}
                       </div>
                       <div className="font-mono-tech text-[10px] text-[#bbcabf] tabular-nums mt-0.5">
-                        {totalRecursiveFiles} pistas
+                        {totalRecursiveFiles} {t.drive.tracks}
                       </div>
                     </div>
                   </div>
-                  <span className="text-[#4edea3] font-mono-tech text-xs">Ver →</span>
+                  <span className="text-[#4edea3] font-mono-tech text-xs">{t.drive.view} →</span>
                 </div>
 
                 {/* Subfolder cards */}
@@ -1111,7 +1113,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                             {sub.name}
                           </div>
                           <div className="font-mono-tech text-[10px] text-[#bbcabf] tabular-nums mt-0.5">
-                            {count > 0 ? `${count} pistas` : 'Carpeta'}
+                            {count > 0 ? `${count} ${t.drive.tracks}` : t.drive.folder}
                           </div>
                         </div>
                       </div>
@@ -1120,7 +1122,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                       <button
                         type="button"
                         onClick={(e) => handlePlaySubfolderDirect(sub, e)}
-                        title={`Reproducir ${sub.name}`}
+                        title={`${t.player.play} ${sub.name}`}
                         className="w-8 h-8 rounded-sm border border-black flex items-center justify-center bg-[#4edea3] text-black hover:bg-[#38c98e] cursor-pointer shrink-0 transition-transform active:scale-95"
                       >
                         {isSubLoading ? (
@@ -1203,8 +1205,8 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                                 handleSelectTrack(file, idx, displayedTracks);
                               }
                             }}
-                            title={isPlaying ? 'Pausar' : 'Reproducir'}
-                            aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
+                            title={isPlaying ? t.player.pause : t.player.play}
+                            aria-label={isPlaying ? t.player.pause : t.player.play}
                             className={`w-10 h-7 sm:w-11 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
                               isPlaying
                                 ? 'bg-[#181818] text-[#4edea3] shadow-[0_2px_0_0_#000000] active:translate-y-[2px]'
@@ -1225,15 +1227,15 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
               ) : isLoading ? (
                 <div className="py-12 text-center font-mono-tech text-xs sm:text-sm text-[#bbcabf] bg-[#201f1f] border-2 border-black p-4 flex flex-col items-center justify-center gap-2">
                   <span className="material-symbols-outlined text-2xl text-[#4edea3] animate-spin">sync</span>
-                  <span>Cargando canciones de la carpeta...</span>
+                  <span>{t.drive.scanning}</span>
                 </div>
               ) : (
                 <div className="py-12 text-center font-mono-tech text-xs sm:text-sm text-[#bbcabf] bg-[#201f1f] border-2 border-black p-4 flex flex-col items-center justify-center gap-2">
                   <span className="material-symbols-outlined text-2xl text-[#f59e0b]">music_off</span>
-                  <span>No hay canciones disponibles en esta carpeta o búsqueda.</span>
+                  <span>{t.drive.emptyFolders}</span>
                   {searchQuery && (
                     <button type="button" onClick={() => setSearchQuery('')} className="text-xs text-[#4edea3] underline mt-1">
-                      Limpiar búsqueda
+                      {t.discover.clearSearch}
                     </button>
                   )}
                 </div>
@@ -1275,7 +1277,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                   type="button"
                   onClick={() => driveAudioEngine.playPrev(true)}
                   className="w-7 h-7 bg-[#201f1f] text-white border border-black flex items-center justify-center hover:bg-[#333]"
-                  title="Anterior"
+                  title={t.player.prev}
                 >
                   <span className="material-symbols-outlined text-sm">skip_previous</span>
                 </button>
@@ -1283,7 +1285,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                   type="button"
                   onClick={handleTogglePlay}
                   className="w-8 h-8 bg-[#4edea3] text-black border border-black flex items-center justify-center hover:bg-[#3bc791]"
-                  title={playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
+                  title={playbackStatus === 'playing' ? t.player.pause : t.player.play}
                 >
                   <span className="material-symbols-outlined text-base font-black">
                     {playbackStatus === 'playing' ? 'pause' : 'play_arrow'}
@@ -1293,7 +1295,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                   type="button"
                   onClick={() => driveAudioEngine.playNext(true)}
                   className="w-7 h-7 bg-[#201f1f] text-white border border-black flex items-center justify-center hover:bg-[#333]"
-                  title="Siguiente"
+                  title={t.player.next}
                 >
                   <span className="material-symbols-outlined text-sm">skip_next</span>
                 </button>

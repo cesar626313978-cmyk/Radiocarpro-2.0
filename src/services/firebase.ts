@@ -24,12 +24,16 @@ export { onAuthStateChanged };
 export type { User };
 
 // Resolve config prioritizing environment variables (for Vercel/production deployment) with fallback to local config
+const resolvedDbId = (import.meta.env.VITE_FIREBASE_DATABASE_ID && import.meta.env.VITE_FIREBASE_DATABASE_ID !== '(default)')
+  ? (import.meta.env.VITE_FIREBASE_DATABASE_ID as string)
+  : firebaseConfig.firestoreDatabaseId;
+
 export const activeFirebaseConfig = {
   projectId: (import.meta.env.VITE_FIREBASE_PROJECT_ID as string) || firebaseConfig.projectId,
   appId: (import.meta.env.VITE_FIREBASE_APP_ID as string) || firebaseConfig.appId,
   apiKey: (import.meta.env.VITE_FIREBASE_API_KEY as string) || firebaseConfig.apiKey,
   authDomain: (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string) || firebaseConfig.authDomain,
-  firestoreDatabaseId: (import.meta.env.VITE_FIREBASE_DATABASE_ID as string) || firebaseConfig.firestoreDatabaseId,
+  firestoreDatabaseId: resolvedDbId,
   storageBucket: (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string) || firebaseConfig.storageBucket,
   messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || firebaseConfig.messagingSenderId,
   oAuthClientId: (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId,
@@ -47,7 +51,7 @@ async function testConnection() {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration: client is offline.');
+      console.error("Please check your Firebase configuration.");
     }
   }
 }

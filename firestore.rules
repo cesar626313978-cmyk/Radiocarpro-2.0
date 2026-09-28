@@ -43,5 +43,11 @@ service cloud.firestore {
     match /tesla_pairings/{code} {
       allow get, list, create, update, delete: if isValidId(code);
     }
+
+    // Feedback and Bug Reports
+    match /feedback/{feedbackId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
   }
 }

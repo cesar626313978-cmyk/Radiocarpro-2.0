@@ -1,5 +1,6 @@
 import React from 'react';
 import { TabType } from '../types/radio';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface SideNavProps {
   currentTab: TabType;
@@ -19,11 +20,13 @@ export const SideNav: React.FC<SideNavProps> = ({
   onOpenSettings,
   activeThemeName,
 }) => {
+  const { t } = useTranslation();
+
   const navItems: { id: TabType; label: string; icon: string; badge?: number }[] = [
-    { id: 'descubrir', label: 'RADIO', icon: 'radio' },
-    { id: 'favoritas', label: 'FAVORITAS', icon: 'favorite', badge: favoritesCount },
-    { id: 'drive', label: 'MUSIC', icon: 'folder_open' },
-    { id: 'coche', label: 'MODO COCHE', icon: 'directions_car' },
+    { id: 'descubrir', label: t.nav.radio, icon: 'radio' },
+    { id: 'favoritas', label: t.nav.favorites, icon: 'favorite', badge: favoritesCount },
+    { id: 'drive', label: t.nav.music, icon: 'folder_open' },
+    { id: 'coche', label: t.nav.carMode, icon: 'directions_car' },
   ];
 
   return (
@@ -81,7 +84,7 @@ export const SideNav: React.FC<SideNavProps> = ({
             type="button"
             onClick={onOpenThemes}
             className="flex items-center justify-between p-3 xl:p-3.5 border-3 border-black font-mono-tech text-xs xl:text-sm font-bold text-left uppercase transition-all duration-100 w-full cursor-pointer bg-[#18181c] text-white hover:bg-[#23232b] hover:translate-x-0.5 mt-2 group shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
-            title="Cambiar tema visual y bioma interactivo de fondo"
+            title={t.settings.changeBiome}
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <span
@@ -90,7 +93,7 @@ export const SideNav: React.FC<SideNavProps> = ({
               >
                 palette
               </span>
-              <span className="truncate">TEMAS</span>
+              <span className="truncate">{t.nav.themes}</span>
             </div>
             {activeThemeName && (
               <span
@@ -113,13 +116,13 @@ export const SideNav: React.FC<SideNavProps> = ({
             type="button"
             onClick={onOpenSettings}
             className="flex items-center justify-between p-3 xl:p-3.5 border-3 border-black font-mono-tech text-xs xl:text-sm font-bold text-left uppercase transition-all duration-100 w-full cursor-pointer bg-[#201f1f] text-[#e5e2e1] hover:bg-[#353534] hover:translate-x-0.5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mt-1.5"
-            title="Ajustes de la aplicación"
+            title={t.settings.title}
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <span className="material-symbols-outlined text-xl shrink-0 text-[#a3b8cc]">
                 settings
               </span>
-              <span className="truncate">AJUSTES</span>
+              <span className="truncate">{t.nav.settings}</span>
             </div>
           </button>
         )}
@@ -130,12 +133,12 @@ export const SideNav: React.FC<SideNavProps> = ({
         <div className="flex items-center justify-between font-mono-tech text-[10px] text-[#bbcabf]">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
-            RADIO ENGINE
+            {t.nav.radioEngine}
           </span>
-          <span className="text-[#10B981] font-bold">ONLINE</span>
+          <span className="text-[#10B981] font-bold">{t.nav.online}</span>
         </div>
         <div className="font-mono-tech text-[9px] text-[#86948a] truncate">
-          STREAM BUFFER: 128KB | AUTO-SYNC
+          {t.nav.streamBuffer}
         </div>
       </div>
     </aside>

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { TabType } from '../types/radio';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface TopAppBarProps {
   currentTab: TabType;
   onSelectTab: (tab: TabType) => void;
-  lang: 'ES' | 'EN';
-  onToggleLang: () => void;
+  lang?: 'ES' | 'EN';
+  onToggleLang?: () => void;
   user: User | null;
   onLoginWithGoogle: () => void;
   onLogout: () => void;
@@ -18,6 +19,8 @@ interface TopAppBarProps {
 export const TopAppBar: React.FC<TopAppBarProps> = ({
   currentTab,
   onSelectTab,
+  lang: propLang,
+  onToggleLang: propToggleLang,
   user,
   onLoginWithGoogle,
   onLogout,
@@ -25,6 +28,10 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   onOpenTeslaPairing,
   isSyncing = false,
 }) => {
+  const { t, lang: ctxLang, toggleLang: ctxToggleLang } = useTranslation();
+  const lang = propLang || ctxLang;
+  const onToggleLang = propToggleLang || ctxToggleLang;
+
   const triggerCarPairing = onOpenCarPairing || onOpenTeslaPairing;
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -71,12 +78,12 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
               Myradio Pro 2.0
             </span>
             <span className="bg-[#8B5CF6] text-white text-[9px] font-mono-tech font-bold px-1.5 py-0.5 border border-black uppercase hidden sm:inline-block">
-              LIVE
+              {t.topBar.live}
             </span>
           </div>
         </div>
 
-        {/* Actions Zone: Responsive Login + Settings + Fullscreen */}
+        {/* Actions Zone: Responsive Login + Settings + Fullscreen + Language */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* User Auth Profile (Firebase + Gmail) */}
           {user ? (
@@ -84,7 +91,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-1.5 sm:gap-2 bg-[#201f1f] border-2 border-black p-1 sm:pr-2.5 hover:bg-[#353534] transition-colors cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                title={user.displayName || user.email || 'Perfil de usuario'}
+                title={user.displayName || user.email || t.topBar.userProfile}
               >
                 {user.photoURL ? (
                   <img
@@ -103,7 +110,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                   </div>
                   <div className="font-mono-tech text-[9px] text-[#4edea3] flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></span>
-                    {isSyncing ? 'SYNC...' : 'CLOUD SYNC'}
+                    {isSyncing ? t.topBar.syncing : t.topBar.synced}
                   </div>
                 </div>
                 <span className="material-symbols-outlined text-sm text-[#bbcabf]">
@@ -123,7 +130,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                     </div>
                     <div className="mt-1 font-mono-tech text-[9px] text-[#10B981] bg-black/40 px-2 py-0.5 border border-black flex items-center gap-1">
                       <span className="material-symbols-outlined text-xs">cloud_done</span>
-                      Favoritas sincronizadas
+                      {t.topBar.favoritesSynced}
                     </div>
                   </div>
 
@@ -136,7 +143,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                       className="w-full text-left font-mono-tech text-xs text-[#bbcabf] hover:text-white p-2 bg-[#181818] border border-[#333] flex items-center gap-2 hover:bg-[#252525] cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-sm text-[#4edea3]">qr_code_scanner</span>
-                      Vincular Coche con Móvil (QR)
+                      {t.topBar.pairCar}
                     </button>
                   )}
 
@@ -145,10 +152,10 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                       setShowUserMenu(false);
                       onLogout();
                     }}
-                    className="neo-button bg-[#EF4444] text-white font-mono-tech text-xs font-bold py-2 border-2 border-black uppercase flex items-center justify-center gap-2 hover:bg-[#dc2626]"
+                    className="neo-button bg-[#EF4444] text-white font-mono-tech text-xs font-bold py-2 border-2 border-black uppercase flex items-center justify-center gap-2 hover:bg-[#dc2626] cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-sm">logout</span>
-                    Cerrar Sesión
+                    {t.topBar.logout}
                   </button>
                 </div>
               )}
@@ -159,8 +166,8 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
               <button
                 onClick={onLoginWithGoogle}
                 className="neo-button bg-white text-black font-mono-tech text-xs font-bold px-2 sm:px-2.5 lg:px-3 py-1.5 border-2 border-black flex items-center gap-1.5 uppercase hover:bg-[#e5e2e1] whitespace-nowrap cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 shrink-0"
-                title="Iniciar sesión con Google para sincronizar tus preferencias"
-                aria-label="Acceder con Google"
+                title={t.topBar.loginWithGoogle}
+                aria-label={t.topBar.loginWithGoogle}
               >
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                   <path
@@ -181,7 +188,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                   />
                 </svg>
                 <span className="hidden sm:inline">
-                  <span className="hidden xl:inline">Acceder con </span>Gmail
+                  {t.topBar.loginWithGmail}
                 </span>
               </button>
 
@@ -190,25 +197,37 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
                 <button
                   onClick={triggerCarPairing}
                   className="neo-button bg-[#4edea3] text-black font-mono-tech text-xs font-bold px-2 sm:px-2.5 py-1.5 border-2 border-black flex items-center gap-1.5 uppercase hover:bg-[#3bc791] whitespace-nowrap cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 shrink-0"
-                  title="Vincular con tu móvil mediante código QR (ideal para la pantalla del coche)"
-                  aria-label="Vincular Coche con QR"
+                  title={t.topBar.pairCar}
+                  aria-label={t.topBar.pairCar}
                 >
                   <span className="material-symbols-outlined text-sm shrink-0">qr_code_scanner</span>
                   <span className="hidden sm:inline">
-                    <span className="hidden xl:inline">Vincular </span>Coche (QR)
+                    {t.topBar.pairCar}
                   </span>
                 </button>
               )}
             </div>
           )}
 
-          {/* 5. Fullscreen Toggle Button */}
+          {/* Quick Direct Language Switcher (1-click Instant ES / EN toggle) */}
+          <button
+            type="button"
+            onClick={onToggleLang}
+            className="h-8 sm:h-9 px-2 bg-[#201f1f] hover:bg-[#353534] text-white border-2 border-black font-mono-tech text-xs font-bold uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer active:translate-y-0.5 flex items-center justify-center gap-1 shrink-0"
+            title={lang === 'ES' ? 'Switch to English' : 'Cambiar a Español'}
+            aria-label="Toggle language"
+          >
+            <span className="material-symbols-outlined text-sm text-[#4edea3]">language</span>
+            <span>{lang}</span>
+          </button>
+
+          {/* Fullscreen Toggle Button */}
           <button
             type="button"
             onClick={handleToggleFullscreen}
             className="w-8 h-8 sm:w-9 sm:h-9 bg-[#201f1f] hover:bg-[#353534] text-white border-2 border-black font-mono-tech text-xs font-bold uppercase transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer active:translate-y-0.5 flex items-center justify-center shrink-0"
-            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa Coche (1920x1200)'}
-            aria-label={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+            title={isFullscreen ? t.topBar.exitFullscreenTooltip : t.topBar.fullscreenTooltip}
+            aria-label={isFullscreen ? t.topBar.exitFullscreen : t.topBar.fullscreen}
           >
             <span className="material-symbols-outlined text-base sm:text-lg text-[#4edea3]">
               {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}

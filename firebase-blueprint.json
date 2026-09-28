@@ -119,6 +119,34 @@
         }
       },
       "required": ["code", "token"]
+    },
+    "FeedbackReport": {
+      "title": "FeedbackReport",
+      "description": "User bug reports, feedback, and feature suggestions",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Sender name or alias"
+        },
+        "email": {
+          "type": "string",
+          "description": "Sender email"
+        },
+        "type": {
+          "type": "string",
+          "description": "Feedback category (fallo, mejora, comentario, soporte)"
+        },
+        "message": {
+          "type": "string",
+          "description": "Feedback body text"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        }
+      },
+      "required": ["message", "type"]
     }
   },
   "firestore": {
@@ -139,6 +167,12 @@
         "$ref": "TeslaPairing"
       },
       "description": "Stores temporary pairing codes for mobile sync in Tesla cars"
+    },
+    "/feedback/{feedbackId}": {
+      "schema": {
+        "$ref": "FeedbackReport"
+      },
+      "description": "User comments, bug reports and suggestions"
     }
   }
 }

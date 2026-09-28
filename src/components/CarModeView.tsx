@@ -9,6 +9,7 @@ import { RealisticSpaceCosmos } from './RealisticSpaceCosmos';
 import { DynamicBackground } from './DynamicBackground';
 import { ThemeId, THEMES } from '../types/theme';
 import { motion } from 'motion/react';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface CarModeViewProps {
   activeSource: 'radio' | 'drive';
@@ -51,6 +52,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   favoriteStations,
   onSelectStation,
 }) => {
+  const { t } = useTranslation();
   // Navigation mode: 'player' (Screenshot 1) vs 'library' (Screenshot 2)
   const [currentView, setCurrentView] = useState<'player' | 'library'>('player');
 
@@ -447,7 +449,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               color: currentView === 'library' ? '#4edea3' : (THEMES[activeTheme]?.colors.accent || '#00e5ff'),
             }}
           >
-            MODO COCHE HUD • {currentView === 'library' ? (activeSource === 'radio' ? 'EMISORAS FAVORITAS' : 'BIBLIOTECA PISTAS') : 'REPRODUCTOR'}
+            {t.carMode.hudTitle} • {currentView === 'library' ? (activeSource === 'radio' ? t.carMode.favoriteStations : t.carMode.tracksLibrary) : t.carMode.player}
           </span>
         </div>
 
@@ -458,7 +460,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               type="button"
               onClick={onOpenThemes}
               className="px-2.5 sm:px-3 py-1 rounded-full bg-white/5 hover:bg-white/15 border border-white/20 text-white font-mono text-[10px] sm:text-xs uppercase tracking-wider flex items-center gap-1 cursor-pointer backdrop-blur-md transition-all group"
-              title="Cambiar tema visual y bioma de fondo"
+              title={t.settings.changeBiome}
             >
               <span
                 className="material-symbols-outlined text-sm sm:text-base group-hover:rotate-12 transition-transform"
@@ -466,7 +468,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               >
                 palette
               </span>
-              <span className="hidden sm:inline">TEMAS</span>
+              <span className="hidden sm:inline">{t.carMode.themes}</span>
             </button>
           )}
 
@@ -474,22 +476,22 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
             type="button"
             onClick={handleToggleFullscreen}
             className="px-2.5 sm:px-3 py-1 rounded-full bg-white/5 hover:bg-white/15 border border-white/20 text-white font-mono text-[10px] sm:text-xs uppercase tracking-wider flex items-center gap-1 cursor-pointer backdrop-blur-md transition-all"
-            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa Coche'}
+            title={isFullscreen ? t.topBar.exitFullscreenTooltip : t.topBar.fullscreenTooltip}
           >
             <span className="material-symbols-outlined text-sm sm:text-base text-cyan-400">
               {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
             </span>
-            <span className="hidden sm:inline">{isFullscreen ? 'VENTANA' : 'PANTALLA TOTAL'}</span>
+            <span className="hidden sm:inline">{isFullscreen ? t.carMode.window : t.carMode.fullscreen}</span>
           </button>
 
           <button
             type="button"
             onClick={onExitCarMode}
             className="px-2.5 sm:px-3.5 py-1 rounded-full bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-200 font-mono text-[10px] sm:text-xs uppercase tracking-wider flex items-center gap-1 cursor-pointer backdrop-blur-md shadow-[0_2px_10px_rgba(0,0,0,0.6)] transition-all"
-            title="Salir del Modo Coche"
+            title={t.carMode.exit}
           >
             <span className="material-symbols-outlined text-sm sm:text-base text-red-400">power_settings_new</span>
-            <span className="hidden sm:inline">Salir</span>
+            <span className="hidden sm:inline">{t.carMode.exit}</span>
           </button>
         </div>
       </div>
@@ -777,11 +779,11 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     }
                   }}
                   className="group relative flex items-center justify-between gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-0.8 rounded-full bg-gradient-to-r from-[#d97706] via-[#ea580c] to-[#b45309] border border-amber-300/80 shadow-[0_0_12px_rgba(245,158,11,0.4)] hover:shadow-[0_0_18px_rgba(245,158,11,0.55)] hover:scale-102 active:scale-98 transition-all cursor-pointer shrink-0 scale-[0.7] origin-center"
-                  title="Conectar o sincronizar Google Drive"
+                  title={t.carMode.connectDrive}
                 >
                   <div className="flex items-center gap-1 text-white font-bold text-[8.5px] sm:text-[10px] tracking-wide">
                     <span className="material-symbols-outlined text-[10px] sm:text-xs text-amber-100">hard_drive</span>
-                    <span>{isDriveConnected ? 'Google Drive' : 'Conectar Drive'}</span>
+                    <span>{isDriveConnected ? 'Google Drive' : t.carMode.connectDrive}</span>
                   </div>
 
                   <span
@@ -791,7 +793,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         : 'bg-black/40 text-amber-200 border border-amber-400/40'
                     }`}
                   >
-                    {isDriveConnected ? 'CONECTADO' : 'DESCONECTADO'}
+                    {isDriveConnected ? t.carMode.connected : t.carMode.disconnected}
                   </span>
                 </button>
 
@@ -805,16 +807,16 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     />
                     <span className="font-bold uppercase">
                       {playbackStatus === 'buffering'
-                        ? 'BÚFER...'
+                        ? t.carMode.buffering
                         : isPlaying
-                        ? 'REPRODUCIENDO'
-                        : 'EN ESPERA'}
+                        ? t.carMode.playing
+                        : t.carMode.standby}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1 px-1.5 xs:px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#051a26]/90 border border-cyan-500/40 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
                     <span className="text-[8px] xs:text-[10px] sm:text-xs">🌤️</span>
-                    <span className="font-bold">Local</span>
+                    <span className="font-bold">{t.carMode.localTime}</span>
                     {localTime && <span className="text-cyan-400 font-semibold">• {localTime}</span>}
                   </div>
                 </div>
@@ -824,14 +826,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setCurrentView('library')}
-                    title="Ver carpeta en la biblioteca"
+                    title={t.carMode.viewFolderInLibrary}
                     className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#041422]/95 border border-cyan-400/50 text-cyan-200 shadow-[0_0_14px_rgba(6,182,212,0.3)] hover:border-cyan-300 hover:bg-[#062035] transition-all cursor-pointer truncate max-w-full"
                   >
                     <span className="material-symbols-outlined text-[10px] xs:text-[12px] sm:text-[14px] text-[#4edea3] shrink-0">
                       {activeSource === 'radio' ? 'radio' : 'folder'}
                     </span>
                     <span className="text-[7px] xs:text-[8px] sm:text-[10px] font-mono tracking-wider uppercase text-cyan-400/80 font-bold shrink-0">
-                      {activeSource === 'radio' ? 'Emisora:' : 'Carpeta:'}
+                      {activeSource === 'radio' ? t.carMode.station : t.carMode.folder}
                     </span>
                     <span className="text-[7.5px] xs:text-[9px] sm:text-[11px] font-mono font-black text-white truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[220px]">
                       {playingFolderName}
@@ -917,7 +919,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       }
                     }}
                     className="w-[48px] xs:w-[60px] sm:w-[84px] h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
-                    title={isRadioMode ? 'Emisora anterior' : 'Pista anterior'}
+                    title={isRadioMode ? t.player.prevStation : t.player.prevTrack}
                   >
                     <span className="text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">PREV</span>
                     <span className="material-symbols-outlined text-[13px] xs:text-base sm:text-xl text-cyan-100">skip_previous</span>
@@ -929,7 +931,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     onClick={onTogglePlay}
                     className="w-[66px] xs:w-[84px] sm:w-[108px] h-12 xs:h-15 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1c1917]/95 via-[#0c0a09]/95 to-[#000000] border border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.55),inset_0_1px_3px_rgba(255,255,255,0.3)] flex flex-col items-center justify-between p-1 sm:p-2 transition-all hover:scale-103 active:scale-95 cursor-pointer"
-                    title={isPlaying ? 'Pausa' : 'Reproducir'}
+                    title={isPlaying ? t.player.pause : t.player.play}
                   >
                     <span className="text-[7px] xs:text-[8px] sm:text-[10px] font-mono font-black text-amber-300 uppercase tracking-wider">
                       {isPlaying ? 'PAUSE' : 'PLAY'}
@@ -953,7 +955,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       }
                     }}
                     className="w-[48px] xs:w-[60px] sm:w-[84px] h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
-                    title={isRadioMode ? 'Emisora siguiente' : 'Pista siguiente'}
+                    title={isRadioMode ? t.player.nextStation : t.player.nextTrack}
                   >
                     <span className="text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold text-cyan-300">NEXT</span>
                     <span className="material-symbols-outlined text-[13px] xs:text-base sm:text-xl text-cyan-100">skip_next</span>
@@ -972,7 +974,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         ? 'bg-[#082032] border-2 border-cyan-400 shadow-[0_0_18px_rgba(6,182,212,0.5)] scale-102 cursor-pointer'
                         : 'bg-[#051522]/90 border border-cyan-500/30 opacity-75 hover:opacity-100 hover:border-cyan-400/70 cursor-pointer'
                     }`}
-                    title={isRadioMode ? 'Modo LOOP no aplicable a radio en directo' : 'Repetir pista (LOOP)'}
+                    title={isRadioMode ? (t.carMode.loop + ' (N/A)') : t.carMode.loop}
                   >
                     <span className={`text-[7px] xs:text-[8px] sm:text-[9px] font-mono font-bold ${isRadioMode ? 'text-cyan-400/30' : 'text-cyan-300'}`}>
                       LOOP
@@ -996,7 +998,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   {activeSource === 'radio' ? (
                     <div className="flex items-center gap-1 text-[9px] xs:text-xs text-emerald-400 font-mono">
                       <span className="w-1 h-1 xs:w-1.5 xs:h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-ping" />
-                      <span>EN DIRECTO</span>
+                      <span>{t.topBar.live}</span>
                       <span className="text-cyan-500 mx-0.5 sm:mx-1">•</span>
                       <span className="text-cyan-300">STREAMING</span>
                     </div>
@@ -1022,48 +1024,54 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     onClick={() => setShowPrivacyModal(true)}
                     className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#051b29]/80 hover:bg-[#07283c] border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
-                    title="Política de Privacidad y Seguridad"
+                    title={t.privacy.title}
                   >
                     <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-cyan-400">verified_user</span>
-                    <span>Privacidad</span>
+                    <span>{t.carMode.privacy}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setShowCarAudioTip(true)}
                     className="flex items-center gap-1 px-2 xs:px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-[#1e1503]/90 hover:bg-[#2e2005] border border-amber-500/50 hover:border-amber-400 text-amber-200 hover:text-white text-[8px] xs:text-[9px] sm:text-[11px] font-bold shadow-[0_0_12px_rgba(245,158,11,0.25)] hover:scale-102 active:scale-98 transition-all cursor-pointer"
-                    title="Consejo de audio si la radio del coche suena a la vez"
+                    title={t.carMode.carAudioTitle}
                   >
                     <span className="material-symbols-outlined text-[9px] xs:text-[11px] sm:text-sm text-amber-400">volume_up</span>
-                    <span>Audio Coche</span>
+                    <span>{t.carMode.carAudio}</span>
                   </button>
                 </div>
 
                 {/* 7. VOLUME SLIDER POD */}
-                <div className="w-[68%] xs:w-[74%] max-w-[140px] xs:max-w-[175px] sm:max-w-[195px] flex items-center justify-between gap-1 sm:gap-1.5 px-2 py-0.5 sm:py-1 rounded-full bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0 mb-0.5 sm:mb-1">
+                <div 
+                  className="w-[80%] xs:w-[84%] sm:w-[88%] max-w-[210px] xs:max-w-[250px] sm:max-w-[280px] flex items-center justify-between gap-1 xs:gap-1.5 sm:gap-2 px-2 xs:px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl bg-[#04141f]/95 border border-cyan-500/40 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8)] shrink-0 mb-0.5 sm:mb-1"
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
                   {/* Speaker Mute/Unmute */}
                   <button
                     type="button"
                     onClick={() => onVolumeChange(volume === 0 ? 0.6 : 0)}
-                    className="text-cyan-300 hover:text-white transition-colors cursor-pointer"
-                    title={volume === 0 ? 'Activar sonido' : 'Silenciar'}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="text-cyan-300 hover:text-white transition-colors cursor-pointer shrink-0 flex items-center justify-center p-0.5"
+                    title={volume === 0 ? t.player.unmute : t.player.mute}
                   >
                     <span className="material-symbols-outlined text-sm sm:text-lg">
                       {volume === 0 ? 'volume_off' : 'volume_up'}
                     </span>
                   </button>
 
-                  {/* Minus button */}
+                  {/* Minus button - Rectangular, wider and 120% larger */}
                   <button
                     type="button"
                     onClick={handleVolumeDown}
-                    className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#072436] hover:bg-[#093550] text-cyan-200 flex items-center justify-center font-bold text-[10px] sm:text-xs cursor-pointer border border-cyan-500/30 transition-all"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="w-8 xs:w-9 sm:w-11 h-5 xs:h-6 sm:h-7 rounded-md bg-[#072436] hover:bg-[#0c3c5a] active:bg-[#0a4d79] text-cyan-200 hover:text-white flex items-center justify-center font-bold cursor-pointer border border-cyan-400/50 shadow-[0_0_8px_rgba(6,182,212,0.25)] hover:shadow-[0_0_12px_rgba(6,182,212,0.45)] transition-all shrink-0 active:scale-95"
+                    title="-"
                   >
-                    −
+                    <span className="leading-none text-sm xs:text-base sm:text-lg font-black select-none">−</span>
                   </button>
 
                   {/* Illuminated Range Slider matching reference style with glowing neon light */}
-                  <div className="relative flex-1 flex items-center h-4 sm:h-5 cursor-pointer select-none">
+                  <div className="relative flex-1 flex items-center h-4 sm:h-5 cursor-pointer select-none min-w-[50px]">
                     {/* Dark Groove Track */}
                     <div className="w-full h-1.5 sm:h-2 bg-[#020b13] rounded-full border border-cyan-500/40 overflow-hidden relative shadow-[inset_0_1px_3px_rgba(0,0,0,0.9)]">
                       {/* Vibrant Neon Light Fill */}
@@ -1087,22 +1095,25 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       step="0.01"
                       value={volume}
                       onChange={e => onVolumeChange(parseFloat(e.target.value))}
+                      onPointerDown={(e) => e.stopPropagation()}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      title={`Volumen: ${Math.round(volume * 100)}%`}
+                      title={`${t.player.volume}: ${Math.round(volume * 100)}%`}
                     />
                   </div>
 
-                  {/* Plus button */}
+                  {/* Plus button - Rectangular, wider and 120% larger */}
                   <button
                     type="button"
                     onClick={handleVolumeUp}
-                    className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#072436] hover:bg-[#093550] text-cyan-200 flex items-center justify-center font-bold text-[10px] sm:text-xs cursor-pointer border border-cyan-500/30 transition-all"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="w-8 xs:w-9 sm:w-11 h-5 xs:h-6 sm:h-7 rounded-md bg-[#072436] hover:bg-[#0c3c5a] active:bg-[#0a4d79] text-cyan-200 hover:text-white flex items-center justify-center font-bold cursor-pointer border border-cyan-400/50 shadow-[0_0_8px_rgba(6,182,212,0.25)] hover:shadow-[0_0_12px_rgba(6,182,212,0.45)] transition-all shrink-0 active:scale-95"
+                    title="+"
                   >
-                    +
+                    <span className="leading-none text-sm xs:text-base sm:text-lg font-black select-none">+</span>
                   </button>
 
                   {/* Percentage */}
-                  <span className="text-[9px] sm:text-xs font-mono font-bold text-cyan-300 w-6 sm:w-7 text-right">
+                  <span className="text-[9px] xs:text-[10px] sm:text-xs font-mono font-bold text-cyan-300 w-7 sm:w-8 text-right shrink-0">
                     {Math.round(volume * 100)}%
                   </span>
                 </div>
@@ -1113,12 +1124,12 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     onClick={() => setCurrentView('library')}
                     className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0 scale-[0.8] origin-center"
-                    title="Abrir Biblioteca de Pistas de Audio"
+                    title={t.carMode.tracksLibrary}
                   >
                     <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
                       radio_button_checked
                     </span>
-                    <span>Pistas ({allTracks.length})</span>
+                    <span>{t.carMode.tracks} ({allTracks.length})</span>
                   </button>
                 )}
 
@@ -1127,12 +1138,12 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                     type="button"
                     onClick={() => setCurrentView('library')}
                     className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-1 sm:py-2 rounded-full bg-[#041a27]/90 hover:bg-[#06263a] border border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.45)] hover:shadow-[0_0_28px_rgba(6,182,212,0.7)] text-cyan-200 hover:text-white font-bold text-[11px] sm:text-sm tracking-wider uppercase transition-all cursor-pointer shrink-0 scale-[0.8] origin-center"
-                    title="Ver Emisoras Favoritas"
+                    title={t.carMode.favoriteStations}
                   >
                     <span className="material-symbols-outlined text-sm sm:text-lg text-cyan-300">
                       radio
                     </span>
-                    <span>Emisoras ({(favoriteStations || []).length})</span>
+                    <span>{t.carMode.stations} ({(favoriteStations || []).length})</span>
                   </button>
                 )}
               </motion.div>
@@ -1152,7 +1163,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                 {/* 1. HEADER: BIBLIOTECA o EMISORAS */}
                 <div className="w-full text-center shrink-0">
                   <h2 className="text-xs sm:text-sm font-black tracking-[0.25em] text-white uppercase drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]">
-                    {activeSource === 'radio' ? 'EMISORAS FAVORITAS' : 'BIBLIOTECA'}
+                    {activeSource === 'radio' ? t.carMode.favoriteStations : t.carMode.library}
                   </h2>
                 </div>
 
@@ -1164,7 +1175,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                       type="text"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      placeholder={activeSource === 'radio' ? "Buscar emisora favorita..." : "Buscar canción o artista..."}
+                      placeholder={activeSource === 'radio' ? t.carMode.searchRadioPlaceholder : t.carMode.searchDrivePlaceholder}
                       className="w-full bg-transparent text-white text-xs placeholder-gray-400/70 focus:outline-none font-sans"
                     />
                     {searchQuery && (
@@ -1290,14 +1301,14 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   {activeSource === 'radio' && filteredStations.length === 0 && (
                     <div className="py-8 px-4 text-center text-xs text-gray-400">
                       {favoriteStations && favoriteStations.length > 0
-                        ? `No se encontraron emisoras favoritas para "${searchQuery}"`
-                        : "No tienes emisoras añadidas a favoritas todavía. Agrégalas en la pestaña Descubrir."}
+                        ? `${t.carMode.noFavoriteStationsFound} "${searchQuery}"`
+                        : t.carMode.noFavoriteStations}
                     </div>
                   )}
 
                   {activeSource !== 'radio' && filteredTracks.length === 0 && (
                     <div className="py-8 text-center text-xs text-gray-400">
-                      No se encontraron canciones para "{searchQuery}"
+                      {t.carMode.noSongsFound} "{searchQuery}"
                     </div>
                   )}
                 </div>
@@ -1310,7 +1321,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   className="flex items-center gap-2 px-4 sm:px-5 py-1 sm:py-1.5 rounded-full bg-[#041e2e]/90 hover:bg-[#072f48] border border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_18px_rgba(6,182,212,0.5)] text-cyan-200 hover:text-white font-bold text-[10px] sm:text-xs tracking-wide uppercase transition-all cursor-pointer shrink-0 scale-[0.82] origin-center mb-1.5 sm:mb-3"
                 >
                   <span className="material-symbols-outlined text-sm sm:text-base text-cyan-300">public</span>
-                  <span>Volver al Reproductor Central</span>
+                  <span>{t.carMode.returnToPlayer}</span>
                 </button>
               </motion.div>
             )}
@@ -1325,7 +1336,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
             <div className="flex items-center justify-between border-b border-amber-500/30 pb-3 mb-4">
               <div className="flex items-center gap-2 text-amber-400">
                 <span className="material-symbols-outlined text-xl">volume_up</span>
-                <h3 className="font-black text-sm uppercase tracking-wide text-white">Audio en el Coche</h3>
+                <h3 className="font-black text-sm uppercase tracking-wide text-white">{t.carMode.carAudioTitle}</h3>
               </div>
               <button
                 type="button"
@@ -1338,30 +1349,22 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
             <div className="font-mono text-xs text-[#d1d5db] flex flex-col gap-3">
               <p className="text-amber-300 font-bold">
-                ¿Se escucha la radio propia del coche al mismo tiempo que esta emisora?
+                {t.carMode.carAudioQuestion}
               </p>
               <p className="text-[11px] leading-relaxed text-[#bbcabf]">
-                Los coches cuentan con un sintonizador físico de radio FM/DAB independiente del navegador web. Por seguridad del vehículo, los navegadores no pueden apagar el chip de radio física, por lo que el sistema mezcla ambos sonidos en los altavoces.
+                {t.carMode.carAudioExplanation}
               </p>
 
               <div className="bg-black/60 border border-amber-500/40 p-3 flex flex-col gap-2 rounded">
                 <div className="text-[#4edea3] font-bold text-[11px] uppercase flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-sm">check_circle</span>
-                  Solución rápida (1 segundo):
+                  1. {t.carMode.carAudioStep1}
                 </div>
-                <ul className="list-disc list-inside space-y-1.5 text-[11px] text-[#e5e5e5]">
-                  <li>
-                    Pulsa la <strong className="text-white">rueda izquierda del volante</strong> (o botón de mute/pausa del volante) una vez para pausar la radio del coche.
-                  </li>
-                  <li>
-                    O toca el <strong className="text-white">mini-reproductor en la pantalla del coche</strong> y pulsa Pausa en la radio FM nativa.
-                  </li>
-                </ul>
+                <div className="text-[#4edea3] font-bold text-[11px] uppercase flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">check_circle</span>
+                  2. {t.carMode.carAudioStep2}
+                </div>
               </div>
-
-              <p className="text-[10px] text-[#86948a] leading-relaxed">
-                Una vez pausada la radio nativa, esta aplicación tomará el control total del audio de tu coche con ecualización de alta fidelidad.
-              </p>
             </div>
 
             <button
@@ -1369,7 +1372,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               onClick={() => setShowCarAudioTip(false)}
               className="mt-5 w-full py-2 bg-amber-400 text-black font-mono text-xs font-black uppercase hover:bg-amber-300 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] rounded"
             >
-              Entendido
+              {t.carMode.carAudioClose}
             </button>
           </div>
         </div>

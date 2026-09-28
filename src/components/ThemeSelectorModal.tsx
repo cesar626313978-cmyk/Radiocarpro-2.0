@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { ThemeId, THEMES } from '../types/theme';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface ThemeSelectorModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
   onSelectTheme,
   onClose,
 }) => {
+  const { t } = useTranslation();
+
   // Close on Escape key press
   useEffect(() => {
     if (!isOpen) return;
@@ -43,10 +46,10 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
             </div>
             <div>
               <h2 className="font-mono-tech text-xs tracking-widest text-[#bbcabf] uppercase">
-                SISTEMA • TEMATIZACIÓN
+                {t.themes.systemTitle}
               </h2>
               <h1 className="font-black text-lg sm:text-xl text-white uppercase tracking-tight leading-none">
-                Biomas y Fondos Dinámicos
+                {t.themes.title}
               </h1>
             </div>
           </div>
@@ -55,7 +58,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
             type="button"
             onClick={onClose}
             className="w-8 h-8 sm:w-9 sm:h-9 bg-[#201f1f] hover:bg-[#353534] text-white border-2 border-black flex items-center justify-center font-bold text-sm cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all"
-            title="Cerrar selector de temas"
+            title={t.themes.close}
           >
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
@@ -63,7 +66,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
 
         {/* Subtitle Info */}
         <p className="font-mono-tech text-xs text-[#94a3b8] mt-3 mb-4 shrink-0">
-          Selecciona un bioma reactivo para transformar la atmósfera, el canvas interactivo de fondo y la paleta cromática de la cabina y el HUD.
+          {t.themes.subtitle}
         </p>
 
         {/* Theme Grid */}
@@ -92,7 +95,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                     style={{ backgroundColor: theme.colors.accent }}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
-                    ACTIVO
+                    {t.themes.activeBadge}
                   </div>
                 )}
 
@@ -160,17 +163,14 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                   <span
                     className="w-3.5 h-3.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                     style={{ backgroundColor: theme.colors.accent }}
-                    title="Acento principal"
                   />
                   <span
                     className="w-3.5 h-3.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                     style={{ backgroundColor: theme.colors.hudCenter }}
-                    title="Centro HUD"
                   />
                   <span
                     className="w-3.5 h-3.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                     style={{ backgroundColor: theme.colors.background }}
-                    title="Fondo cósmico"
                   />
                   <span className="font-mono-tech text-[9px] text-[#64748b] ml-auto uppercase">
                     {theme.id}
@@ -184,14 +184,14 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
         {/* Footer Actions */}
         <div className="mt-4 pt-3 border-t-2 border-black flex items-center justify-between shrink-0">
           <div className="font-mono-tech text-[10px] text-[#64748b] hidden sm:block">
-            Sincronización en caliente instantánea sin interrumpir el audio
+            {t.nav.radioEngine} • {t.nav.online}
           </div>
           <button
             type="button"
             onClick={onClose}
             className="neo-button bg-[#4edea3] hover:bg-[#3ec48e] text-black font-mono-tech text-xs font-bold px-4 py-2 border-2 border-black uppercase ml-auto shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 cursor-pointer"
           >
-            Aplicar y Cerrar
+            {t.common.close}
           </button>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { driveAudioEngine } from '../services/driveAudioEngine';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { db, auth } from '../services/firebase';
 import { collection, addDoc } from 'firebase/firestore';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -44,6 +45,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaveSettings,
   currentSettings,
 }) => {
+  const { t, lang: ctxLang, toggleLang: ctxToggleLang } = useTranslation();
+  const currentLang = lang || ctxLang;
+  const handleToggleLang = () => {
+    ctxToggleLang();
+    if (onToggleLang) {
+      onToggleLang();
+    }
+  };
+
   const getInitialBufferSize = () => {
     if (currentSettings?.bufferSize) return currentSettings.bufferSize;
     try {
@@ -105,6 +115,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [savedToast, setSavedToast] = useState(false);
 
   const [sleepSecondsLeft, setSleepSecondsLeft] = useState(() => audioEngine.getSleepTimerSeconds());
+  const [customMinutes, setCustomMinutes] = useState<string>('');
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
 
   // Formulario de Contacto y Feedback
@@ -139,9 +150,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const formatTimeLeft = (secs: number) => {
     if (secs <= 0) return '';
-    const m = Math.floor(secs / 60);
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
+    if (h > 0) {
+      return `${h}h ${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s`;
+    }
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleSetCustomSleepTimer = (e: React.FormEvent) => {
+    e.preventDefault();
+    const mins = parseInt(customMinutes, 10);
+    if (!isNaN(mins) && mins > 0) {
+      audioEngine.setSleepTimer(mins, fadeOutMins);
+      setCustomMinutes('');
+    }
   };
 
   if (!isOpen) return null;
@@ -264,13 +288,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#4edea3] text-2xl">settings</span>
             <h2 className="font-black text-xl text-white uppercase font-['Inter']">
-              Ajustes de Myradio Pro 2.0
+              {t.settings.title}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-[#bbcabf] hover:text-white p-1"
-            title="Cerrar"
+            className="text-[#bbcabf] hover:text-white p-1 cursor-pointer"
+            title={t.settings.close}
           >
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -290,11 +314,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     palette
                   </span>
                   <span className="font-mono-tech text-xs text-white font-bold uppercase">
-                    Tema Visual y Bioma Dinámico
+                    {t.settings.themeBiomeTitle}
                   </span>
                 </div>
                 <p className="font-mono-tech text-[10px] text-[#bbcabf]">
-                  Tema activo: <span className="font-bold text-white" style={{ color: 'var(--color-accent, #00e5ff)' }}>{activeThemeName || 'Espacio Exterior'}</span>
+                  {t.settings.currentTheme}: <span className="font-bold text-white" style={{ color: 'var(--color-accent, #00e5ff)' }}>{activeThemeName || (currentLang === 'ES' ? 'Espacio Exterior' : 'Outer Space')}</span>
                 </p>
               </div>
               <button
@@ -309,7 +333,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   color: 'var(--color-accent, #00e5ff)',
                 }}
               >
-                Cambiar Bioma
+                {t.settings.changeBiome}
               </button>
             </div>
           )}
@@ -318,12 +342,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="bg-[#131313] p-3.5 border-2 border-black flex flex-col gap-2">
             <div className="flex justify-between items-center">
               <span className="font-mono-tech text-xs text-white font-bold uppercase">
-                Tamaño de Buffer de Transmisión
+                {t.settings.bufferTitle}
               </span>
               <span className="font-mono-tech text-xs text-[#4edea3] font-bold">{bufferSize}</span>
             </div>
             <p className="font-mono-tech text-[10px] text-[#bbcabf]">
-              Mayor buffer previene microcortes en redes móviles inestables.
+              {t.settings.bufferDesc}
             </p>
             <div className="grid grid-cols-4 gap-2 mt-1">
               {['64KB', '128KB', '256KB', '512KB'].map(size => (
@@ -343,30 +367,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* Sleep Timer (Temporizador de Apagado) */}
-          <div className="bg-[#131313] p-3.5 border-2 border-black flex flex-col gap-2">
-            <div className="flex justify-between items-center">
+          <div className="bg-[#131313] p-3.5 border-2 border-black flex flex-col gap-2.5">
+            <div className="flex justify-between items-center flex-wrap gap-1.5">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#4edea3] text-base">bedtime</span>
                 <span className="font-mono-tech text-xs text-white font-bold uppercase">
-                  Temporizador de Apagado (Sleep Timer)
+                  {t.settings.sleepTimerTitle}
                 </span>
               </div>
               {sleepSecondsLeft > 0 && (
-                <span className="font-mono-tech text-xs text-[#4edea3] font-bold animate-pulse">
-                  Apagando en {formatTimeLeft(sleepSecondsLeft)}
+                <span className="font-mono-tech text-xs text-[#4edea3] font-bold animate-pulse flex items-center gap-1 bg-[#052e16] border border-[#10B981] px-2 py-0.5">
+                  <span className="material-symbols-outlined text-xs">timer</span>
+                  {t.settings.stopsIn} {formatTimeLeft(sleepSecondsLeft)}
                 </span>
               )}
             </div>
-            <p className="font-mono-tech text-[10px] text-[#bbcabf]">
-              Detiene la reproducción de audio automáticamente tras el tiempo seleccionado (audioEngine.stop).
+            <p className="font-mono-tech text-[10px] text-[#bbcabf] leading-normal">
+              {t.settings.sleepTimerDesc}
             </p>
-            <div className="grid grid-cols-5 gap-1.5 mt-1">
+
+            {/* Presets Grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mt-0.5">
               {[
                 { label: 'Off', mins: 0 },
                 { label: '15m', mins: 15 },
                 { label: '30m', mins: 30 },
                 { label: '45m', mins: 45 },
                 { label: '60m', mins: 60 },
+                { label: '90m', mins: 90 },
               ].map(item => {
                 const isActive =
                   (item.mins === 0 && sleepSecondsLeft === 0) ||
@@ -382,24 +410,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         audioEngine.setSleepTimer(item.mins, fadeOutMins);
                       }
                     }}
-                    className={`py-1.5 font-mono-tech text-xs font-bold border-2 border-black uppercase cursor-pointer ${
+                    className={`py-2 px-1 font-mono-tech text-xs font-bold border-2 border-black uppercase cursor-pointer transition-all flex items-center justify-center gap-1 ${
                       isActive
                         ? 'bg-[#4edea3] text-[#003824] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
                         : 'bg-[#201f1f] text-white hover:bg-[#353534]'
                     }`}
                   >
-                    {item.label}
+                    {isActive && item.mins > 0 && (
+                      <span className="material-symbols-outlined text-xs font-black">check</span>
+                    )}
+                    <span>{item.label}</span>
                   </button>
                 );
               })}
             </div>
+
+            {/* Custom Minutes Input */}
+            <form onSubmit={handleSetCustomSleepTimer} className="flex items-center gap-2 mt-0.5">
+              <div className="relative flex-1">
+                <input
+                  type="number"
+                  min="1"
+                  max="480"
+                  placeholder={t.settings.customMinsPlaceholder}
+                  value={customMinutes}
+                  onChange={e => setCustomMinutes(e.target.value)}
+                  className="w-full bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3]"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!customMinutes || parseInt(customMinutes, 10) <= 0}
+                className="neo-button bg-[#8B5CF6] text-white px-3.5 py-1.5 font-mono-tech text-xs font-bold uppercase border-2 border-black flex items-center gap-1 hover:bg-[#7c3aed] cursor-pointer disabled:opacity-40 transition-all shrink-0"
+              >
+                <span className="material-symbols-outlined text-xs">alarm_add</span>
+                <span>{t.settings.set}</span>
+              </button>
+            </form>
+
             {sleepSecondsLeft > 0 && (
               <button
                 type="button"
                 onClick={() => audioEngine.cancelSleepTimer()}
-                className="mt-1 bg-[#EF4444]/20 border border-[#EF4444] text-[#EF4444] hover:bg-[#EF4444]/30 py-1 font-mono-tech text-[10px] font-bold uppercase cursor-pointer"
+                className="mt-1 bg-[#EF4444]/20 border border-[#EF4444] text-[#EF4444] hover:bg-[#EF4444]/30 py-1.5 font-mono-tech text-xs font-bold uppercase cursor-pointer flex items-center justify-center gap-1.5 transition-all"
               >
-                Cancelar Temporizador Activo
+                <span className="material-symbols-outlined text-sm">stop_circle</span>
+                <span>{t.settings.cancelActiveTimer}</span>
               </button>
             )}
           </div>
@@ -408,21 +464,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="bg-[#131313] p-3.5 border-2 border-black flex flex-col gap-2">
             <div className="flex justify-between items-center">
               <span className="font-mono-tech text-xs text-white font-bold uppercase">
-                Duración de Fade-Out (Temporizador)
+                {t.settings.fadeOutTitle}
               </span>
               <span className="font-mono-tech text-xs text-[#8B5CF6] font-bold">
-                {fadeOutMins} Minutos
+                {fadeOutMins} {t.settings.minutes}
               </span>
             </div>
             <p className="font-mono-tech text-[10px] text-[#bbcabf]">
-              Atenuación suave progresiva de volumen (-3dB/min) antes del apagado.
+              {t.settings.fadeOutDesc}
             </p>
             <div className="grid grid-cols-3 gap-2 mt-1">
               {[3, 5, 10].map(mins => (
                 <button
                   key={mins}
                   onClick={() => setFadeOutMins(mins)}
-                  className={`py-1.5 font-mono-tech text-xs font-bold border-2 border-black uppercase ${
+                  className={`py-1.5 font-mono-tech text-xs font-bold border-2 border-black uppercase cursor-pointer ${
                     fadeOutMins === mins
                       ? 'bg-[#8B5CF6] text-white'
                       : 'bg-[#201f1f] text-white hover:bg-[#353534]'
@@ -440,15 +496,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#4edea3] text-base">shuffle</span>
                 <span className="font-mono-tech text-xs text-white font-bold uppercase">
-                  Crossfade entre canciones de Drive
+                  {t.settings.crossfadeTitle}
                 </span>
               </div>
               <span className="font-mono-tech text-xs text-[#4edea3] font-bold">
-                {driveCrossfade === 0 ? 'Desactivado' : `${driveCrossfade} Segundos`}
+                {driveCrossfade === 0 ? t.settings.crossfadeDisabled : `${driveCrossfade} ${t.settings.seconds}`}
               </span>
             </div>
             <p className="font-mono-tech text-[10px] text-[#bbcabf]">
-              Fundido cruzado continuo y sin silencios entre pistas consecutivas de Google Drive.
+              {t.settings.crossfadeDesc}
             </p>
             <div className="grid grid-cols-5 gap-1.5 mt-1">
               {[
@@ -486,11 +542,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#4edea3] text-base">tune</span>
                 <span className="font-mono-tech text-xs text-white font-bold uppercase">
-                  Normalizador de Dinámica (AGC en Tiempo Real)
+                  {t.settings.dynamicNormalizerTitle}
                 </span>
               </div>
               <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
-                Nivelación continua perceptual y compensación de ganancia (+3.5 dB). Iguala el volumen entre grabaciones antiguas de CDs y masterizaciones modernas comprimidas de Drive sin distorsión por recorte digital.
+                {t.settings.dynamicNormalizerDesc}
               </div>
             </div>
             <label className="neo-toggle shrink-0 ml-3">
@@ -510,10 +566,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="bg-[#131313] p-3.5 border-2 border-black flex justify-between items-center">
             <div>
               <div className="font-mono-tech text-xs text-white font-bold uppercase">
-                Sintetizador de Respaldo WebAudio
+                {t.settings.synthFallbackTitle}
               </div>
               <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
-                Genera audio continuo si la emisora externa tiene cortes de red.
+                {t.settings.synthFallbackDesc}
               </div>
             </div>
             <label className="neo-toggle shrink-0 ml-3">
@@ -530,10 +586,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="bg-[#131313] p-3.5 border-2 border-black flex justify-between items-center">
             <div>
               <div className="font-mono-tech text-xs text-white font-bold uppercase">
-                Modo Ahorro de Datos (Low Bitrate)
+                {t.settings.lowDataModeTitle}
               </div>
               <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
-                Prioriza codecs AAC 64kbps para reducir consumo en datos móviles.
+                {t.settings.lowDataModeDesc}
               </div>
             </div>
             <label className="neo-toggle shrink-0 ml-3">
@@ -547,20 +603,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* Language Switch */}
-          <div className="bg-[#131313] p-3.5 border-2 border-black flex justify-between items-center">
+          <div className="bg-[#131313] p-3.5 border-2 border-black flex justify-between items-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
             <div>
-              <div className="font-mono-tech text-xs text-white font-bold uppercase">
-                Idioma de la Interfaz
+              <div className="font-mono-tech text-xs text-white font-bold uppercase flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm text-[#4edea3]">language</span>
+                <span>{t.settings.languageTitle}</span>
               </div>
               <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
-                Español (ES) / English (EN)
+                {t.settings.languageDesc}
               </div>
             </div>
             <button
-              onClick={onToggleLang}
-              className="neo-button bg-[#201f1f] text-white px-4 py-1.5 border-2 border-black font-mono-tech text-xs font-bold"
+              onClick={handleToggleLang}
+              className="neo-button bg-[#4edea3] text-[#003824] px-4 py-1.5 border-2 border-black font-mono-tech text-xs font-black uppercase cursor-pointer hover:bg-[#38c98e] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
             >
-              {lang === 'ES' ? 'Español' : 'English'}
+              {currentLang === 'ES' ? 'Español (ES)' : 'English (EN)'}
             </button>
           </div>
 
@@ -569,17 +626,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div>
               <div className="font-mono-tech text-xs text-white font-bold uppercase flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm text-[#4edea3]">verified_user</span>
-                <span>Política de Privacidad y Seguridad</span>
+                <span>{t.settings.privacyTitle}</span>
               </div>
               <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
-                Permisos Google Drive, búfer offline IndexedDB y protección de datos.
+                {t.settings.privacyDesc}
               </div>
             </div>
             <button
               onClick={() => setShowPrivacyModal(true)}
               className="neo-button bg-[#062436] hover:bg-[#073048] text-cyan-300 border-2 border-cyan-500/60 px-3.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 cursor-pointer shrink-0 ml-3"
             >
-              <span>Ver</span>
+              <span>{t.settings.view}</span>
               <span className="material-symbols-outlined text-sm">open_in_new</span>
             </button>
           </div>
@@ -589,30 +646,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center gap-2 border-b border-black pb-1.5">
               <span className="material-symbols-outlined text-[#4edea3] text-lg">mail</span>
               <span className="font-mono-tech text-xs text-white font-bold uppercase">
-                {lang === 'ES' ? 'Contacto y Soporte (Buzón de Sugerencias)' : 'Contact & Support'}
+                {t.settings.contactTitle}
               </span>
             </div>
             <p className="font-mono-tech text-[10px] text-[#bbcabf] leading-normal">
-              {lang === 'ES' 
-                ? '¿Has detectado algún fallo, tienes una idea de mejora o quieres proponer una emisora? Envía tus comentarios directamente al desarrollador de forma segura.' 
-                : 'Found a bug, have an improvement idea, or want to suggest a radio station? Send feedback securely.'}
+              {t.settings.contactDesc}
             </p>
 
             {feedbackStatus === 'success' ? (
               <div className="bg-[#052e16] border border-[#10B981] p-3 text-center flex flex-col gap-1">
                 <span className="material-symbols-outlined text-[#10B981] text-2xl">check_circle</span>
                 <div className="font-mono-tech text-xs text-white font-bold uppercase">
-                  {lang === 'ES' ? '¡Mensaje Enviado!' : 'Message Sent!'}
+                  {t.settings.messageSent}
                 </div>
                 <div className="font-mono-tech text-[9px] text-[#10B981]">
-                  {lang === 'ES' ? 'Gracias por tu aportación para mejorar MyRadio Pro.' : 'Thanks for helping make MyRadio Pro better.'}
+                  {t.settings.messageSentDesc}
                 </div>
                 <button
                   type="button"
                   onClick={() => setFeedbackStatus('idle')}
                   className="mt-2 text-white hover:underline text-[9px] font-mono-tech uppercase"
                 >
-                  {lang === 'ES' ? 'Enviar otro mensaje' : 'Send another message'}
+                  {t.settings.sendAnother}
                 </button>
               </div>
             ) : (
@@ -620,11 +675,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-1">
                     <label className="font-mono-tech text-[9px] text-[#bbcabf] uppercase font-bold">
-                      {lang === 'ES' ? 'Nombre / Alias' : 'Name / Alias'}
+                      {t.settings.nameAlias}
                     </label>
                     <input
                       type="text"
-                      placeholder={lang === 'ES' ? 'Opcional' : 'Optional'}
+                      placeholder={t.settings.optional}
                       value={feedbackName}
                       onChange={e => setFeedbackName(e.target.value)}
                       className="bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3]"
@@ -632,11 +687,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="font-mono-tech text-[9px] text-[#bbcabf] uppercase font-bold">
-                      {lang === 'ES' ? 'Tu Email' : 'Your Email'}
+                      {t.settings.yourEmail}
                     </label>
                     <input
                       type="email"
-                      placeholder={lang === 'ES' ? 'Opcional' : 'Optional'}
+                      placeholder={t.settings.optional}
                       value={feedbackEmail}
                       onChange={e => setFeedbackEmail(e.target.value)}
                       className="bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3]"
@@ -646,27 +701,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div className="flex flex-col gap-1">
                   <label className="font-mono-tech text-[9px] text-[#bbcabf] uppercase font-bold">
-                    {lang === 'ES' ? 'Tipo de Mensaje' : 'Message Type'}
+                    {t.settings.messageType}
                   </label>
                   <select
                     value={feedbackType}
                     onChange={e => setFeedbackType(e.target.value as any)}
                     className="bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3]"
                   >
-                    <option value="comentario">{lang === 'ES' ? 'Comentario / Sugerencia' : 'Comment / Suggestion'}</option>
-                    <option value="fallo">{lang === 'ES' ? 'Reportar un Fallo / Bug' : 'Report a Bug / Issue'}</option>
-                    <option value="mejora">{lang === 'ES' ? 'Propuesta de Mejora' : 'Improvement Proposal'}</option>
-                    <option value="soporte">{lang === 'ES' ? 'Soporte Técnico' : 'Technical Support'}</option>
+                    <option value="comentario">{t.settings.comment}</option>
+                    <option value="fallo">{t.settings.bug}</option>
+                    <option value="mejora">{t.settings.improvement}</option>
+                    <option value="soporte">{t.settings.support}</option>
                   </select>
                 </div>
 
                 <div className="flex flex-col gap-1">
                   <label className="font-mono-tech text-[9px] text-[#bbcabf] uppercase font-bold">
-                    {lang === 'ES' ? 'Mensaje *' : 'Message *'}
+                    {t.settings.message}
                   </label>
                   <textarea
                     rows={3}
-                    placeholder={lang === 'ES' ? 'Escribe aquí tus comentarios, sugerencias o fallos...' : 'Type your comments or bug reports here...'}
+                    placeholder={t.settings.messagePlaceholder}
                     value={feedbackMessage}
                     onChange={e => setFeedbackMessage(e.target.value)}
                     className="bg-[#201f1f] text-white border border-black p-1.5 font-mono-tech text-xs outline-none focus:border-[#4edea3] resize-none h-20"
@@ -688,12 +743,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {feedbackStatus === 'sending' ? (
                     <>
                       <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                      <span>{lang === 'ES' ? 'Enviando...' : 'Sending...'}</span>
+                      <span>{t.settings.sending}</span>
                     </>
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-sm">send</span>
-                      <span>{lang === 'ES' ? 'Enviar Comentario' : 'Send Feedback'}</span>
+                      <span>{t.settings.sendMessage}</span>
                     </>
                   )}
                 </button>
@@ -703,11 +758,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* System Specs Readout */}
           <div className="bg-[#0e0e0e] p-3 border-2 border-black font-mono-tech text-[10px] text-[#86948a] flex flex-col gap-1">
-            <div className="text-white font-bold">ESPECIFICACIONES DEL SISTEMA:</div>
-            <div>• Motor de Audio: HTML5 Audio + Web Audio API (AnalyserNode 64 FFT)</div>
-            <div>• Almacenamiento Local: SQLite Synced / LocalStorage Persistent DB</div>
-            <div>• Estado del Sistema: {favoritesCount} Favoritas | {alarmsCount} Alarmas</div>
-            <div>• Identidad Visual: Signal Zero Neo-Brutalist 3px Hard-Edge</div>
+            <div className="text-white font-bold">{t.settings.systemSpecsTitle}</div>
+            <div>• {t.settings.audioEngineSpec}</div>
+            <div>• {t.settings.localStorageSpec}</div>
+            <div>• {t.settings.systemStatusSpec}: {favoritesCount} {t.nav.favorites} | {alarmsCount} 0</div>
+            <div>• {t.settings.visualIdentitySpec}</div>
           </div>
         </div>
 
@@ -717,13 +772,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={onClose}
             className="flex-1 bg-[#353534] text-white py-3 border-3 border-black font-mono-tech text-xs font-bold uppercase hover:bg-[#4a4948]"
           >
-            Cerrar
+            {t.common.close}
           </button>
           <button
             onClick={handleSave}
             className="flex-1 neo-button bg-[#4edea3] text-[#003824] py-3 border-3 border-black font-mono-tech text-xs font-bold uppercase hover:bg-[#38c98e]"
           >
-            {savedToast ? '¡Guardado!' : 'Guardar Ajustes'}
+            {savedToast ? t.common.saved : t.settings.saveSettings}
           </button>
         </div>
       </div>

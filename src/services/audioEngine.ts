@@ -1,5 +1,6 @@
 import { PlaybackStatus } from '../types/radio';
 import { teslaBackgroundService } from './teslaBackgroundService';
+import { driveAudioEngine } from './driveAudioEngine';
 
 /**
  * High-performance, Resilient Audio Engine for live internet radio streams in vehicles.
@@ -551,8 +552,8 @@ class RadioAudioEngine {
     this.cancelSleepTimer();
     if (minutes <= 0) return;
 
-    const totalSeconds = minutes * 60;
-    const fadeOutSeconds = Math.min(totalSeconds, fadeOutMinutes * 60);
+    const totalSeconds = Math.round(minutes * 60);
+    const fadeOutSeconds = Math.min(totalSeconds, Math.round(fadeOutMinutes * 60));
     const fadeStartSecond = totalSeconds - fadeOutSeconds;
 
     this.sleepTimerSecondsRemaining = totalSeconds;
@@ -567,12 +568,17 @@ class RadioAudioEngine {
       const elapsed = totalSeconds - this.sleepTimerSecondsRemaining;
       if (!fadeStarted && elapsed >= fadeStartSecond && fadeOutSeconds > 0) {
         fadeStarted = true;
-        this.startFadeOut(fadeOutSeconds / 60);
+        this.startFadeOut(fadeOutSeconds);
       }
 
       if (this.sleepTimerSecondsRemaining <= 0) {
         this.cancelSleepTimer();
         this.stop();
+        try {
+          driveAudioEngine.stop();
+        } catch (err) {
+          console.warn('[AudioEngine] Error stopping drive audio on sleep timer:', err);
+        }
       }
     }, 1000);
   }
@@ -581,6 +587,11 @@ class RadioAudioEngine {
     if (this.sleepTimerInterval !== null) {
       clearInterval(this.sleepTimerInterval);
       this.sleepTimerInterval = null;
+    }
+    if (this.fadeInterval !== null) {
+      clearInterval(this.fadeInterval);
+      this.fadeInterval = null;
+      this.setVolume(this.targetVolume);
     }
     this.sleepTimerSecondsRemaining = 0;
     this.sleepTimerListeners.forEach(l => l(0));

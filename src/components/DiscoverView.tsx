@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { RadioStation, PlaybackStatus } from '../types/radio';
 import { INITIAL_STATIONS } from '../services/stationsData';
 import { searchRadioStations, getTopVotedStations } from '../services/radioBrowserApi';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface DiscoverViewProps {
   currentStation: RadioStation | null;
@@ -44,6 +45,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   onInstallPWA,
   isInstallable,
 }) => {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
 
   const [stations, setStations] = useState<RadioStation[]>(
@@ -87,7 +89,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           );
           setStations(fallback);
           if (fallback.length === 0) {
-            setSearchError(`No se encontraron emisoras en directo para "${query}".`);
+            setSearchError(`${t.discover.noStationsForQuery} "${query}".`);
           }
         } else {
           setStations(initialStations.length > 0 ? initialStations : INITIAL_STATIONS);
@@ -97,7 +99,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
         if (isMounted) {
           const base = initialStations.length > 0 ? initialStations : INITIAL_STATIONS;
           setStations(base);
-          setSearchError('Catálogo local activo (sin conexión con Radio Browser).');
+          setSearchError(t.discover.localCatalogNotice);
         }
       } finally {
         if (isMounted) {
@@ -138,7 +140,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-[#4edea3] animate-pulse" />
           <h2 className="font-mono-tech text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-            Emisoras en Vivo (30.000+ Online)
+            {t.discover.title}
           </h2>
           <span className="text-[10px] font-mono-tech px-1.5 py-0.5 bg-[#1A1A1A] border border-black text-[#4edea3] font-bold">
             {sortedStations.length}
@@ -151,10 +153,10 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             type="button"
             onClick={onInstallPWA}
             className="neo-button bg-[#4edea3] hover:bg-[#38c98e] text-[#003824] px-2.5 py-1 text-[10px] font-mono-tech font-black uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 cursor-pointer active:scale-95 transition-transform"
-            title="Instalar Myradio Pro 2.0 en la pantalla de inicio"
+            title={t.discover.installPwa}
           >
             <span className="material-symbols-outlined text-xs">download</span>
-            <span>Instalar PWA</span>
+            <span>{t.discover.installPwa}</span>
           </button>
         )}
       </div>
@@ -169,7 +171,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Busca cualquier emisora o país en internet (ej. SER, Ibiza, Jazz, Madrid)..."
+          placeholder={t.discover.searchPlaceholder}
           className="w-full bg-[#18392b] hover:bg-[#1d4434] focus:bg-[#1f4937] border-2 border-black text-white pl-12 pr-10 py-3 font-mono-tech text-xs sm:text-sm font-semibold placeholder:text-[#9bc7ae] focus:outline-none focus:border-[#4edea3] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] focus:shadow-[3px_3px_0px_0px_#4edea3] transition-all"
         />
         {searchQuery ? (
@@ -177,13 +179,13 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             type="button"
             onClick={() => setSearchQuery('')}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 bg-[#254f3c] hover:bg-[#316950] text-white border border-black flex items-center justify-center cursor-pointer transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
-            title="Borrar búsqueda"
+            title={t.discover.clearSearch}
           >
             <span className="material-symbols-outlined text-sm font-bold">close</span>
           </button>
         ) : (
           <span className="hidden sm:inline-flex items-center text-[10px] font-mono-tech uppercase font-bold text-[#4edea3] bg-[#0c261b] px-2 py-0.5 border border-[#4edea3]/40 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-            30.000+ EN VIVO
+            {t.discover.liveStationsCount}
           </span>
         )}
       </div>
@@ -203,7 +205,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             sync
           </span>
           <p className="font-mono-tech text-xs text-[#bbcabf] uppercase tracking-wider">
-            Buscando en la red mundial (30.000+ emisoras)...
+            {t.discover.searchingOnline}
           </p>
         </div>
       ) : sortedStations.length === 0 ? (
@@ -213,12 +215,12 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             search_off
           </span>
           <h3 className="font-bold text-sm sm:text-base text-white uppercase">
-            Sin resultados
+            {t.discover.noResultsTitle}
           </h3>
           <p className="font-mono-tech text-xs text-[#bbcabf] mt-1 max-w-xs">
             {searchQuery
-              ? `No se encontraron emisoras en internet para "${searchQuery}"`
-              : 'No se encontraron emisoras disponibles'}
+              ? `${t.discover.noResultsDesc} "${searchQuery}"`
+              : t.discover.noResultsTitle}
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
@@ -227,7 +229,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               onClick={handleClearFilters}
               className="neo-button bg-[#4edea3] text-[#003824] px-3 py-1.5 font-mono-tech text-[11px] font-black uppercase border border-black cursor-pointer"
             >
-              Restablecer filtros
+              {t.discover.resetFilters}
             </button>
           </div>
         </div>
@@ -263,25 +265,25 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                       playbackStatus === 'buffering' ? (
                         <span className="inline-flex items-center gap-1 text-[#F59E0B] font-bold uppercase text-[9px]">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-ping" />
-                          Conectando...
+                          {t.discover.buffering}
                         </span>
                       ) : playbackStatus === 'error' ? (
                         <span className="inline-flex items-center gap-1 text-[#EF4444] font-bold uppercase text-[9px]">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
-                          No disponible
+                          {t.discover.unavailable}
                         </span>
                       ) : isPlaying ? (
                         <span className="inline-flex items-center gap-1 text-[#4edea3] font-bold uppercase text-[9px]">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse" />
-                          En Directo
+                          {t.discover.nowPlaying}
                         </span>
                       ) : (
-                        <span className="text-[#bbcabf] text-[9px] font-bold">PAUSADA</span>
+                        <span className="text-[#bbcabf] text-[9px] font-bold">{t.discover.paused}</span>
                       )
                     ) : isFav ? (
                       <span className="inline-flex items-center gap-1 text-[#EF4444] font-bold uppercase text-[9px]">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
-                        Favorita ★
+                        {t.discover.favoriteBadge}
                       </span>
                     ) : (
                       <span className="text-[#bbcabf] text-[9px] uppercase font-bold">
@@ -298,7 +300,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                       onToggleFavorite(station.id, station);
                     }}
                     className="text-[#bbcabf] hover:text-[#EF4444] p-1 cursor-pointer transition-colors"
-                    title={isFav ? 'Quitar de favoritas' : 'Añadir a favoritas'}
+                    title={isFav ? t.favorites.removeFavorite : t.favorites.addFavorite}
                   >
                     <span
                       className={`material-symbols-outlined text-base ${
@@ -374,21 +376,21 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     }}
                     title={
                       isCurrent && isPlaying
-                        ? 'Pausar emisión'
+                        ? t.player.pause
                         : isCurrent && playbackStatus === 'buffering'
-                        ? 'Conectando...'
+                        ? t.discover.buffering
                         : isCurrent && playbackStatus === 'error'
-                        ? 'Reintentar sintonización'
-                        : 'Sintonizar'
+                        ? t.discover.retrying
+                        : t.discover.tune
                     }
                     aria-label={
                       isCurrent && isPlaying
-                        ? 'Pausar emisión'
+                        ? t.player.pause
                         : isCurrent && playbackStatus === 'buffering'
-                        ? 'Conectando...'
+                        ? t.discover.buffering
                         : isCurrent && playbackStatus === 'error'
-                        ? 'Reintentar sintonización'
-                        : 'Sintonizar'
+                        ? t.discover.retrying
+                        : t.discover.tune
                     }
                     className={`w-11 h-7 sm:w-12 sm:h-7.5 rounded-sm border-2 border-black flex items-center justify-center cursor-pointer shrink-0 transition-all select-none ${
                       isCurrent && isPlaying

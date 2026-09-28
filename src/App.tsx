@@ -17,6 +17,7 @@ import { DynamicBackground } from './components/DynamicBackground';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { ThemeId, THEMES } from './types/theme';
 import { ThemeService } from './services/themeService';
+import { useTranslation } from './i18n/LanguageContext';
 import { CarModeView } from './components/CarModeView';
 import { TeslaPairingModal } from './components/TeslaPairingModal';
 import { MobilePairingView } from './components/MobilePairingView';
@@ -72,7 +73,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isTeslaPairingModalOpen, setIsTeslaPairingModalOpen] = useState<boolean>(false);
   const [mobilePairCode, setMobilePairCode] = useState<string | null>(null);
-  const [lang, setLang] = useState<'ES' | 'EN'>('ES');
+  const { lang, setLang, toggleLang } = useTranslation();
 
   // Dynamic Biomes & Visual Thematization state
   const [activeTheme, setActiveTheme] = useState<ThemeId>(ThemeService.getInitialTheme);
@@ -939,7 +940,7 @@ export default function App() {
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
         lang={lang}
-        onToggleLang={() => setLang(l => (l === 'ES' ? 'EN' : 'ES'))}
+        onToggleLang={toggleLang}
         user={user}
         onLoginWithGoogle={handleLoginWithGoogle}
         onLogout={handleLogout}
@@ -1138,7 +1139,7 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         lang={lang}
-        onToggleLang={() => setLang(l => (l === 'ES' ? 'EN' : 'ES'))}
+        onToggleLang={toggleLang}
         favoritesCount={favoriteStationObjects.length}
         alarmsCount={0}
         onOpenThemes={() => setIsThemeModalOpen(true)}
