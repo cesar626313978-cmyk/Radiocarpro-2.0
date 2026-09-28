@@ -622,23 +622,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* Privacy Policy Link */}
-          <div className="bg-[#131313] p-3.5 border-2 border-black flex justify-between items-center">
-            <div>
-              <div className="font-mono-tech text-xs text-white font-bold uppercase flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm text-[#4edea3]">verified_user</span>
-                <span>{t.settings.privacyTitle}</span>
+          <div className="bg-[#131313] p-3.5 border-2 border-black flex flex-col gap-2.5">
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="font-mono-tech text-xs text-white font-bold uppercase flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm text-[#4edea3]">verified_user</span>
+                  <span>{t.settings.privacyTitle}</span>
+                </div>
+                <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
+                  {t.settings.privacyDesc}
+                </div>
               </div>
-              <div className="font-mono-tech text-[10px] text-[#bbcabf] mt-0.5">
-                {t.settings.privacyDesc}
-              </div>
+              <button
+                onClick={() => setShowPrivacyModal(true)}
+                className="neo-button bg-[#062436] hover:bg-[#073048] text-cyan-300 border-2 border-cyan-500/60 px-3.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 cursor-pointer shrink-0 ml-3"
+              >
+                <span>{t.settings.view}</span>
+                <span className="material-symbols-outlined text-sm">open_in_new</span>
+              </button>
             </div>
-            <button
-              onClick={() => setShowPrivacyModal(true)}
-              className="neo-button bg-[#062436] hover:bg-[#073048] text-cyan-300 border-2 border-cyan-500/60 px-3.5 py-1.5 font-mono-tech text-xs font-bold uppercase flex items-center gap-1 cursor-pointer shrink-0 ml-3"
-            >
-              <span>{t.settings.view}</span>
-              <span className="material-symbols-outlined text-sm">open_in_new</span>
-            </button>
+
+            {/* Direct Official Links */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#222]">
+              <a
+                href="https://www.audio-car.es/privacidad.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-black/60 border border-cyan-500/40 text-cyan-300 hover:text-white hover:border-cyan-300 text-[10px] font-mono-tech transition-all"
+              >
+                <span className="material-symbols-outlined text-[11px] text-cyan-400">policy</span>
+                <span>audio-car.es/privacidad.html</span>
+                <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+              </a>
+              <a
+                href="https://www.audio-car.es/terminos.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-black/60 border border-amber-500/40 text-amber-300 hover:text-white hover:border-amber-300 text-[10px] font-mono-tech transition-all"
+              >
+                <span className="material-symbols-outlined text-[11px] text-amber-400">description</span>
+                <span>audio-car.es/terminos.html</span>
+                <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+              </a>
+            </div>
           </div>
 
           {/* Formulario de Contacto / Soporte / Sugerencias */}

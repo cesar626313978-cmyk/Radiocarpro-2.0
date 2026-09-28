@@ -128,16 +128,93 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                   : 'No comercializamos tus datos con anunciantes ni empleamos cookies de perfilado publicitario. Tu concentración al volante y la privacidad de tus reproducciones son nuestra prioridad absoluta.'}
               </p>
             </div>
+
+            {/* Section 6 - Official Legal Documentation Links */}
+            <div className="bg-gradient-to-r from-cyan-950/40 via-black/50 to-cyan-950/40 border border-cyan-500/30 rounded-xl p-4 space-y-3 shadow-[0_0_20px_rgba(6,182,212,0.12)]">
+              <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm uppercase tracking-wide">
+                <span className="material-symbols-outlined text-base">gavel</span>
+                <span>{t.privacy.officialLinksSection}</span>
+              </div>
+              <p className="text-gray-300 text-xs">
+                {t.privacy.officialLinksDesc}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                <a
+                  href="https://www.audio-car.es/privacidad.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-3 rounded-xl bg-[#03111b]/80 border border-cyan-400/40 hover:border-cyan-300 hover:bg-[#072438] text-cyan-100 hover:text-white transition-all shadow-[0_2px_8px_rgba(0,0,0,0.4)] group"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-400/30 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-base text-cyan-300">policy</span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] sm:text-xs font-bold truncate">
+                        {t.privacy.privacyLinkText}
+                      </div>
+                      <div className="text-[9px] sm:text-[10px] text-cyan-400/70 font-mono truncate">
+                        audio-car.es/privacidad.html
+                      </div>
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-base text-cyan-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0 ml-1">
+                    open_in_new
+                  </span>
+                </a>
+
+                <a
+                  href="https://www.audio-car.es/terminos.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-3 rounded-xl bg-[#03111b]/80 border border-cyan-400/40 hover:border-cyan-300 hover:bg-[#072438] text-cyan-100 hover:text-white transition-all shadow-[0_2px_8px_rgba(0,0,0,0.4)] group"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-400/30 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-base text-amber-300">description</span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] sm:text-xs font-bold truncate">
+                        {t.privacy.termsLinkText}
+                      </div>
+                      <div className="text-[9px] sm:text-[10px] text-amber-400/70 font-mono truncate">
+                        audio-car.es/terminos.html
+                      </div>
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-base text-cyan-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0 ml-1">
+                    open_in_new
+                  </span>
+                </a>
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-t border-cyan-500/30 bg-black/60 backdrop-blur-md">
-            <span className="text-[10px] text-cyan-400/70 font-mono">
-              {isEn ? 'Updated: 2026 • GDPR Compliance & Google API Services' : 'Actualizado: 2026 • Cumplimiento RGPD & Google API Services'}
-            </span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-5 py-3.5 border-t border-cyan-500/30 bg-black/60 backdrop-blur-md">
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-cyan-400/70 font-mono">
+              <span>{isEn ? 'Updated: 2026 •' : 'Actualizado: 2026 •'}</span>
+              <a
+                href="https://www.audio-car.es/privacidad.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-white transition-colors"
+              >
+                {t.privacy.privacyLinkText}
+              </a>
+              <span>•</span>
+              <a
+                href="https://www.audio-car.es/terminos.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-white transition-colors"
+              >
+                {t.privacy.termsLinkText}
+              </a>
+            </div>
             <button
               onClick={onClose}
-              className="px-5 py-2 rounded-full bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.6)] cursor-pointer transition-all"
+              className="px-5 py-2 rounded-full bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.6)] cursor-pointer transition-all shrink-0"
             >
               {isEn ? 'Got it' : 'Entendido'}
             </button>

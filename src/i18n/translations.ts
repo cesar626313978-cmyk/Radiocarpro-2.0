@@ -285,6 +285,10 @@ export interface Translations {
     point2Desc: string;
     point3Title: string;
     point3Desc: string;
+    officialLinksSection: string;
+    officialLinksDesc: string;
+    privacyLinkText: string;
+    termsLinkText: string;
   };
   pairing: {
     title: string;
@@ -606,6 +610,11 @@ export const translations: Record<Language, Translations> = {
       point2Desc: 'La aplicación no tiene permisos de escritura, modificación ni eliminación sobre tus archivos.',
       point3Title: 'Aislamiento total:',
       point3Desc: 'No accedemos a documentos, fotos ni ningún otro dato personal fuera de la carpeta musical autorizada.',
+      officialLinksSection: '6. Documentación Legal y Términos Oficiales',
+      officialLinksDesc:
+        'Puedes consultar la documentación legal completa, política de privacidad web y términos de servicio en nuestras páginas oficiales:',
+      privacyLinkText: 'Política de Privacidad Oficial',
+      termsLinkText: 'Términos y Condiciones de Uso',
     },
     pairing: {
       title: 'Conectar Gmail & Google Drive',
@@ -928,6 +937,11 @@ export const translations: Record<Language, Translations> = {
       point2Desc: 'The application has no write, edit, or delete permissions over your files.',
       point3Title: 'Total isolation:',
       point3Desc: 'We never access documents, photos, or any other personal data outside the authorized music folder.',
+      officialLinksSection: '6. Official Legal Documentation & Terms',
+      officialLinksDesc:
+        'You can review our full legal documentation, official web privacy policy, and terms of service at our official URLs:',
+      privacyLinkText: 'Official Privacy Policy',
+      termsLinkText: 'Terms & Conditions of Service',
     },
     pairing: {
       title: 'Connect Gmail & Google Drive',
