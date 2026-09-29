@@ -49,13 +49,15 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   const [showEq, setShowEq] = useState<boolean>(false);
   const [showDriveGuide, setShowDriveGuide] = useState<boolean>(false);
 
-  const [folderInput] = useState<string>(() => {
+  const [folderInput, setFolderInput] = useState<string>(() => {
     try {
-      return localStorage.getItem('radiostream_drive_folder_id') || 'https://drive.google.com/drive/folders/1mUgFaomlz2DDuXNw_1T5fQ64bGympC8E';
+      return localStorage.getItem('radiostream_drive_folder_id') || '';
     } catch {
-      return 'https://drive.google.com/drive/folders/1mUgFaomlz2DDuXNw_1T5fQ64bGympC8E';
+      return '';
     }
   });
+  const [availableDriveFolders, setAvailableDriveFolders] = useState<{ id: string; name: string }[]>([]);
+  const [isListingDriveFolders, setIsListingDriveFolders] = useState<boolean>(false);
 
   const [subfolders, setSubfolders] = useState<{ id: string; name: string }[]>(() => {
     if (!cachedInitial?.subfolders) return [];
@@ -304,6 +306,21 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       if (!token) {
         setIsAuthenticated(false);
         setIsLoading(false);
+        // Preserve offline cached library if available so music is never cut off
+        const cached = await driveCacheService.getCachedLibrary();
+        if (cached && Array.isArray(cached.allRecursiveFiles) && cached.allRecursiveFiles.length > 0) {
+          setCurrentFolderId(cached.folderId);
+          setFiles(cached.files);
+          setSubfolders(cached.subfolders);
+          setAllRecursiveFiles(cached.allRecursiveFiles);
+          setTotalRecursiveFiles(cached.totalRecursiveFiles);
+          setFolderStatus(`${cached.allRecursiveFiles.length} canciones disponibles en caché local (sesión expirada)`);
+          setLoadProgress(100);
+          driveAudioEngine.setPlaylist(cached.files.length > 0 ? cached.files : cached.allRecursiveFiles);
+        } else {
+          setFolderStatus('Sesión de Google Drive expirada o no iniciada');
+          setErrorMessage('La sesión de Google Drive ha expirado. Google renueva el acceso periódicamente por seguridad. Pulsa "Vincular Coche" para renovarla con tu móvil.');
+        }
         return;
       }
 
@@ -314,12 +331,39 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
       }
 
       if (!folderId) {
-        setErrorMessage('No se encontró la carpeta de Google Drive especificada. Por favor, comprueba el enlace.');
-        setFolderStatus('Carpeta no encontrada');
+        // Fetch all accessible folders in user's Drive so user can click their folder
+        try {
+          setIsListingDriveFolders(true);
+          const folders = await googleDriveService.getUserFolders(token);
+          if (folders && folders.length > 0) {
+            setAvailableDriveFolders(folders);
+          }
+        } catch {} finally {
+          setIsListingDriveFolders(false);
+        }
+
+        // Also check if we have cached library
+        const cached = await driveCacheService.getCachedLibrary();
+        if (cached && Array.isArray(cached.allRecursiveFiles) && cached.allRecursiveFiles.length > 0) {
+          setCurrentFolderId(cached.folderId);
+          setFiles(cached.files);
+          setSubfolders(cached.subfolders);
+          setAllRecursiveFiles(cached.allRecursiveFiles);
+          setTotalRecursiveFiles(cached.totalRecursiveFiles);
+          setFolderStatus(`${cached.allRecursiveFiles.length} canciones cargadas desde la caché local`);
+          setLoadProgress(100);
+          driveAudioEngine.setPlaylist(cached.files.length > 0 ? cached.files : cached.allRecursiveFiles);
+          setIsLoading(false);
+          return;
+        }
+
+        setErrorMessage('No se encontró automáticamente la carpeta "Mi música" en Google Drive. Elige una de tus carpetas a continuación o introduce su enlace/ID.');
+        setFolderStatus('Selecciona tu carpeta de música');
         setIsLoading(false);
         return;
       }
 
+      setAvailableDriveFolders([]);
       setCurrentFolderId(folderId);
       setLoadProgress(60);
       setFolderStatus('Escaneando archivos de audio y subcarpetas...');
@@ -665,6 +709,46 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
           <button type="button" onClick={() => setErrorMessage(null)} className="text-white hover:opacity-80">
             <span className="material-symbols-outlined text-base">close</span>
           </button>
+        </div>
+      )}
+
+      {/* Interactive Folder Picker when automatic search suggests folders or needs user choice */}
+      {availableDriveFolders.length > 0 && (
+        <div className="bg-[#141414] border-3 border-[#4edea3] p-4 neo-shadow flex flex-col gap-3 w-full">
+          <div className="flex items-center justify-between border-b border-[#2b2b2b] pb-2">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#4edea3]">folder_special</span>
+              <h3 className="font-mono-tech text-xs sm:text-sm font-bold uppercase text-white">
+                Carpetas encontradas en tu Google Drive ({availableDriveFolders.length})
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAvailableDriveFolders([])}
+              className="text-gray-400 hover:text-white"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
+          <p className="font-mono-tech text-xs text-[#bbb]">
+            Toca la carpeta que contiene tus canciones para cargarla al reproductor:
+          </p>
+          <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto p-1">
+            {availableDriveFolders.map(folder => (
+              <button
+                key={folder.id}
+                type="button"
+                onClick={() => {
+                  setFolderInput(folder.id);
+                  loadMusicFolder(folder.id, true);
+                }}
+                className="neo-button bg-[#202020] border-2 border-black hover:border-[#4edea3] hover:bg-[#282828] text-white px-3 py-2 font-mono-tech text-xs font-bold flex items-center gap-2 cursor-pointer transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+              >
+                <span className="material-symbols-outlined text-[#4edea3] text-sm">folder</span>
+                <span>{folder.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

@@ -61,8 +61,9 @@ import { googleDriveService } from './googleDriveService';
 
 // Initialize Auth
 export const auth = getAuth(app);
-// Google / Gmail Provider strictly for authentication and user favorites sync (no Drive scopes)
+// Google Provider configured with Drive scopes for seamless in-car & mobile access
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
 
 export enum OperationType {
   CREATE = 'create',
@@ -155,6 +156,10 @@ export async function signInWithGoogle(forceRedirect = false): Promise<User | nu
 
   try {
     const result = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+      googleDriveService.setAccessToken(credential.accessToken);
+    }
     return result.user;
   } catch (error: any) {
     console.warn('Google Popup Sign In failed, attempting fallback to Redirect:', error);
@@ -182,6 +187,10 @@ export async function handleRedirectAuth(): Promise<User | null> {
   try {
     const result = await getRedirectResult(auth);
     if (result && result.user) {
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        googleDriveService.setAccessToken(credential.accessToken);
+      }
       return result.user;
     }
   } catch (error) {
@@ -358,7 +367,11 @@ export async function loadUserPreferencesFromFirestore(userId: string): Promise<
       return snap.data() as any;
     }
     return null;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+      console.warn('[Firestore] Acceso restringido en /users (sesión emparejada Tesla), usando sincronización paired.');
+      return null;
+    }
     handleFirestoreError(error, OperationType.GET, path);
     return null;
   }

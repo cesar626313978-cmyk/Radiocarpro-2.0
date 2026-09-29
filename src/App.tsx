@@ -447,15 +447,15 @@ export default function App() {
       const userFavsKey = getFavsStorageKey(userId);
       const userObjsKey = getFavObjsStorageKey(userId);
 
-      // 1. Instant local cache retrieval for this specific user
-      const cachedFavsRaw = localStorage.getItem(userFavsKey);
-      const cachedObjsRaw = localStorage.getItem(userObjsKey);
+      // 1. Instant local cache retrieval for this specific user, with fallback to global cache
+      const cachedFavsRaw = localStorage.getItem(userFavsKey) || localStorage.getItem('radiostream_favs');
+      const cachedObjsRaw = localStorage.getItem(userObjsKey) || localStorage.getItem('radiostream_fav_objects');
 
       let localFavs: string[] = [];
       if (cachedFavsRaw) {
         try {
           const parsed = JSON.parse(cachedFavsRaw);
-          if (Array.isArray(parsed)) localFavs = parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) localFavs = parsed;
         } catch {}
       }
       let localObjs: Record<string, RadioStation> = {};
@@ -473,8 +473,33 @@ export default function App() {
         setFavoriteStationsMap(localObjs);
       }
 
-      // 2. Fetch ground-truth preferences from Firestore database
-      const remoteData = await loadUserPreferencesFromFirestore(userId);
+      // 2. Fetch ground-truth preferences from Firestore or paired Tesla session
+      let remoteData: any = null;
+      const syncKey = targetUser.email || userId;
+
+      if (auth.currentUser && auth.currentUser.uid === userId) {
+        try {
+          remoteData = await loadUserPreferencesFromFirestore(userId);
+        } catch (e) {
+          console.warn('[Firestore] Error leyendo /users:', e);
+        }
+      }
+
+      // Fallback for Tesla in-car paired session without direct Firebase Auth credentials
+      if (!remoteData || !Array.isArray(remoteData.favorites) || remoteData.favorites.length === 0) {
+        try {
+          const pairedData = await teslaPairingService.getPairedPreferences(syncKey);
+          if (pairedData && Array.isArray(pairedData.favorites) && pairedData.favorites.length > 0) {
+            remoteData = {
+              ...remoteData,
+              ...pairedData,
+            };
+          }
+        } catch (e) {
+          console.warn('[TeslaPairingService] Error leyendo preferencias emparejadas:', e);
+        }
+      }
+
       const remoteFavs = (remoteData && Array.isArray(remoteData.favorites)) ? remoteData.favorites : [];
 
       // Merge local and remote station play times
@@ -516,41 +541,54 @@ export default function App() {
         }
       });
 
-      console.log(`[Firestore] Sincronización de favoritas para ${targetUser.email || userId}: Local(${localFavs.length}), Remotas(${remoteFavs.length}), Unidas(${mergedFavorites.length})`);
-      isIncomingUpdateRef.current = true;
-      setFavorites(mergedFavorites);
-      setFavoriteStationsMap(mergedObjsMap);
+      // Only update favorites if we actually have data (protects against blanking out on start)
+      if (mergedFavorites.length > 0) {
+        console.log(`[Firestore] Sincronización de favoritas para ${targetUser.email || userId}: Local(${localFavs.length}), Remotas(${remoteFavs.length}), Unidas(${mergedFavorites.length})`);
+        isIncomingUpdateRef.current = true;
+        setFavorites(mergedFavorites);
+        setFavoriteStationsMap(mergedObjsMap);
 
-      try {
-        localStorage.setItem(userFavsKey, JSON.stringify(mergedFavorites));
-        localStorage.setItem(userObjsKey, JSON.stringify(mergedObjsMap));
-        localStorage.setItem('radiostream_favs', JSON.stringify(mergedFavorites));
-        localStorage.setItem('radiostream_fav_objects', JSON.stringify(mergedObjsMap));
-      } catch {}
+        try {
+          localStorage.setItem(userFavsKey, JSON.stringify(mergedFavorites));
+          localStorage.setItem(userObjsKey, JSON.stringify(mergedObjsMap));
+          localStorage.setItem('radiostream_favs', JSON.stringify(mergedFavorites));
+          localStorage.setItem('radiostream_fav_objects', JSON.stringify(mergedObjsMap));
+        } catch {}
 
-      if (pendingFavoriteStationRef.current) {
-        const pendingStation = pendingFavoriteStationRef.current;
-        pendingFavoriteStationRef.current = null;
-        if (!mergedFavorites.includes(pendingStation.id)) {
-          mergedFavorites.push(pendingStation.id);
+        if (pendingFavoriteStationRef.current) {
+          const pendingStation = pendingFavoriteStationRef.current;
+          pendingFavoriteStationRef.current = null;
+          if (!mergedFavorites.includes(pendingStation.id)) {
+            mergedFavorites.push(pendingStation.id);
+          }
+          mergedObjsMap[pendingStation.id] = pendingStation;
+          setFavorites([...mergedFavorites]);
+          setFavoriteStationsMap({ ...mergedObjsMap });
         }
-        mergedObjsMap[pendingStation.id] = pendingStation;
-        setFavorites([...mergedFavorites]);
-        setFavoriteStationsMap({ ...mergedObjsMap });
-      }
 
-      // Save merged state back to Firestore to ensure complete sync across devices
-      const favObjectsArray: RadioStation[] = Object.values(mergedObjsMap);
-      await saveUserPreferencesToFirestore(
-        userId,
-        {
+        // Save merged state back to Firestore if logged in
+        if (auth.currentUser && auth.currentUser.uid === userId) {
+          const favObjectsArray: RadioStation[] = Object.values(mergedObjsMap);
+          await saveUserPreferencesToFirestore(
+            userId,
+            {
+              favorites: mergedFavorites,
+              favoriteStationObjects: favObjectsArray,
+              alarms: remoteData?.alarms || EMPTY_ALARMS,
+              stationPlaytimes: mergedPlaytimes,
+            },
+            true
+          );
+        }
+
+        // Keep paired document updated in background
+        teslaPairingService.savePairedPreferences(syncKey, {
           favorites: mergedFavorites,
-          favoriteStationObjects: favObjectsArray,
-          alarms: remoteData?.alarms || EMPTY_ALARMS,
+          favoriteStationObjects: Object.values(mergedObjsMap),
+          settings: remoteData?.settings || userSettings,
           stationPlaytimes: mergedPlaytimes,
-        },
-        true
-      );
+        }).catch(() => {});
+      }
 
       setTimeout(() => {
         isIncomingUpdateRef.current = false;
@@ -721,16 +759,23 @@ export default function App() {
     const objsKey = getFavObjsStorageKey(currentUserId);
 
     try {
-      localStorage.setItem(favsKey, JSON.stringify(favorites));
-      localStorage.setItem(objsKey, JSON.stringify(favoriteStationsMap));
-      localStorage.setItem('radiostream_favs', JSON.stringify(favorites));
-      localStorage.setItem('radiostream_fav_objects', JSON.stringify(favoriteStationsMap));
+      if (favorites.length > 0) {
+        localStorage.setItem(favsKey, JSON.stringify(favorites));
+        localStorage.setItem(objsKey, JSON.stringify(favoriteStationsMap));
+        localStorage.setItem('radiostream_favs', JSON.stringify(favorites));
+        localStorage.setItem('radiostream_fav_objects', JSON.stringify(favoriteStationsMap));
+      }
     } catch {
       // ignore
     }
 
     // Do NOT write to Firestore if we are loading user preferences or applying a remote snapshot
     if (isInitialUserLoadRef.current || isIncomingUpdateRef.current) {
+      return;
+    }
+
+    // Safeguard: Never overwrite cloud data with empty array on startup
+    if (favorites.length === 0) {
       return;
     }
 
@@ -816,6 +861,50 @@ export default function App() {
       setFavorites([]);
       setFavoriteStationsMap({});
       setIsSyncing(false);
+    }
+  };
+
+  /**
+   * Restores curated top favorite stations if the user's list was lost or is empty
+   */
+  const handleRestoreDefaultFavorites = () => {
+    const topIds = ['cadena-ser', 'heart-80s', 'pure-ibiza-radio'];
+    const candidates = INITIAL_STATIONS.slice(0, 10);
+    const chosenIds = Array.from(new Set([...topIds, ...candidates.map(s => s.id)])).slice(0, 8);
+    const chosenMap: Record<string, RadioStation> = {};
+    chosenIds.forEach(id => {
+      const st = stations.find(s => s.id === id) || INITIAL_STATIONS.find(s => s.id === id);
+      if (st) chosenMap[st.id] = st;
+    });
+
+    setFavorites(chosenIds);
+    setFavoriteStationsMap(chosenMap);
+
+    const currentUserId = user?.uid;
+    try {
+      localStorage.setItem(getFavsStorageKey(currentUserId), JSON.stringify(chosenIds));
+      localStorage.setItem(getFavObjsStorageKey(currentUserId), JSON.stringify(chosenMap));
+      localStorage.setItem('radiostream_favs', JSON.stringify(chosenIds));
+      localStorage.setItem('radiostream_fav_objects', JSON.stringify(chosenMap));
+    } catch {}
+
+    if (user && currentUserId) {
+      const syncKey = user.email || currentUserId;
+      if (auth.currentUser && auth.currentUser.uid === currentUserId) {
+        saveUserPreferencesToFirestore(currentUserId, {
+          favorites: chosenIds,
+          favoriteStationObjects: Object.values(chosenMap),
+          alarms: EMPTY_ALARMS,
+          settings: userSettings,
+          stationPlaytimes,
+        }).catch(() => {});
+      }
+      teslaPairingService.savePairedPreferences(syncKey, {
+        favorites: chosenIds,
+        favoriteStationObjects: Object.values(chosenMap),
+        settings: userSettings,
+        stationPlaytimes,
+      }).catch(() => {});
     }
   };
 
@@ -1147,6 +1236,7 @@ export default function App() {
               onNavigateToDiscover={() => handleSelectTab('descubrir')}
               user={user}
               onLoginWithGoogle={handleLoginWithGoogle}
+              onRestoreDefaultFavorites={handleRestoreDefaultFavorites}
             />
           </div>
 
@@ -1215,6 +1305,7 @@ export default function App() {
           onOpenThemes={() => setIsThemeModalOpen(true)}
           favoriteStations={favoriteStationObjects}
           onSelectStation={handleTuneToStation}
+          onRestoreDefaultFavorites={handleRestoreDefaultFavorites}
         />
       )}
 

@@ -274,7 +274,7 @@ export class GoogleDriveService {
   }
 
   /**
-   * Searches for the music folder in Google Drive (preferred ID, localStorage, default ID '1mUgFaomlz2DDuXNw_1T5fQ64bGympC8E', or 'mimusica' name).
+   * Searches for the music folder in Google Drive (preferred ID, localStorage, 'Mi música', 'Mi musica', 'mimusica', etc.).
    */
   public async findMusicFolderId(token: string, preferredInput?: string): Promise<string | null> {
     let targetId = preferredInput ? this.extractFolderId(preferredInput) : '';
@@ -282,66 +282,150 @@ export class GoogleDriveService {
     // 1. If preferredInput was provided, verify it first
     if (targetId) {
       try {
-        const url = `https://www.googleapis.com/drive/v3/files/${targetId}?fields=id,name,mimeType`;
+        const url = `https://www.googleapis.com/drive/v3/files/${targetId}?fields=id,name,mimeType,trashed&supportsAllDrives=true`;
         const res = await this.fetchWithBackoff(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.id) {
+          if (data && data.id && !data.trashed) {
             if (typeof window !== 'undefined') {
               try { localStorage.setItem('radiostream_drive_folder_id', data.id); } catch {}
             }
             return data.id;
           }
+        } else if (res.status === 404) {
+          if (typeof window !== 'undefined') {
+            try { localStorage.removeItem('radiostream_drive_folder_id'); } catch {}
+          }
         }
       } catch {
-        // continue to name search
+        // continue
       }
     }
 
-    // 2. Search user's Drive by common music folder names first ('mimusica', '_MUSIC', 'Music', 'Música')
-    const query = encodeURIComponent("(name = 'mimusica' or name = '_MUSIC' or name = 'Music' or name = 'Música') and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
-    const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`;
-
-    try {
-      const res = await this.fetchWithBackoff(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.files && data.files.length > 0) {
-          const foundId = data.files[0].id;
-          if (typeof window !== 'undefined') {
-            try { localStorage.setItem('radiostream_drive_folder_id', foundId); } catch {}
-          }
-          return foundId;
-        }
-      }
-    } catch {
-      // continue
-    }
-
-    // 3. Fallback to localStorage saved ID if name search didn't return anything
-    if (!targetId && typeof window !== 'undefined') {
+    // 2. Check saved ID in localStorage
+    if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('radiostream_drive_folder_id');
-        if (saved) {
-          const verifyUrl = `https://www.googleapis.com/drive/v3/files/${saved}?fields=id,name,mimeType`;
+        if (saved && saved !== targetId) {
+          const verifyUrl = `https://www.googleapis.com/drive/v3/files/${saved}?fields=id,name,mimeType,trashed&supportsAllDrives=true`;
           const verifyRes = await this.fetchWithBackoff(verifyUrl, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (verifyRes.ok) {
-            return saved;
+            const vData = await verifyRes.json();
+            if (vData && vData.id && !vData.trashed) {
+              return saved;
+            }
+          } else if (verifyRes.status === 404) {
+            localStorage.removeItem('radiostream_drive_folder_id');
           }
         }
       } catch {
-        // ignore
+        // continue
       }
     }
 
+    // 3. Robust Search across all user folders and shared drives
+    const normalize = (s: string) =>
+      s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+    try {
+      let pageToken: string | undefined = undefined;
+      let matchedFolderId: string | null = null;
+      let pagesChecked = 0;
+
+      do {
+        let listUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("mimeType = 'application/vnd.google-apps.folder' and trashed = false")}&fields=nextPageToken,files(id,name)&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+        if (pageToken) {
+          listUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
+        }
+
+        const res = await this.fetchWithBackoff(listUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const files: { id: string; name: string }[] = data.files || [];
+
+          // Tier 1: exact "mimusica" or "mymusic"
+          const tier1 = files.find(f => {
+            const n = normalize(f.name);
+            return n === 'mimusica' || n === 'mymusic';
+          });
+          if (tier1) {
+            matchedFolderId = tier1.id;
+            break;
+          }
+
+          // Tier 2: starts with or contains "mimusica"
+          const tier2 = files.find(f => {
+            const n = normalize(f.name);
+            return n.includes('mimusica') || n.includes('mymusic');
+          });
+          if (tier2) {
+            matchedFolderId = tier2.id;
+            break;
+          }
+
+          // Tier 3: exact "musica" or "music" or "canciones"
+          const tier3 = files.find(f => {
+            const n = normalize(f.name);
+            return n === 'musica' || n === 'music' || n === 'canciones' || n === 'audio';
+          });
+          if (tier3) {
+            matchedFolderId = tier3.id;
+            break;
+          }
+
+          // Tier 4: contains "musica" or "music"
+          const tier4 = files.find(f => {
+            const n = normalize(f.name);
+            return n.includes('musica') || n.includes('music') || n.includes('cancion');
+          });
+          if (tier4 && !matchedFolderId) {
+            matchedFolderId = tier4.id;
+          }
+
+          pageToken = data.nextPageToken;
+          pagesChecked++;
+        } else {
+          break;
+        }
+      } while (pageToken && pagesChecked < 10);
+
+      if (matchedFolderId) {
+        if (typeof window !== 'undefined') {
+          try { localStorage.setItem('radiostream_drive_folder_id', matchedFolderId); } catch {}
+        }
+        return matchedFolderId;
+      }
+    } catch (err) {
+      console.warn('Error during fuzzy folder search:', err);
+    }
+
     return null;
+  }
+
+  /**
+   * Retrieves all top-level or accessible folders in user's Drive so the user can easily choose
+   */
+  public async getUserFolders(token: string): Promise<{ id: string; name: string }[]> {
+    try {
+      const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("mimeType = 'application/vnd.google-apps.folder' and trashed = false")}&fields=files(id,name)&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+      const res = await this.fetchWithBackoff(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.files || [];
+      }
+    } catch (err) {
+      console.warn('Error fetching user folders:', err);
+    }
+    return [];
   }
 
   /**

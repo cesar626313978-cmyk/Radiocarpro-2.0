@@ -31,6 +31,7 @@ interface CarModeViewProps {
   onOpenThemes?: () => void;
   favoriteStations?: RadioStation[];
   onSelectStation?: (station: RadioStation) => void;
+  onRestoreDefaultFavorites?: () => void;
 }
 
 export const CarModeView: React.FC<CarModeViewProps> = ({
@@ -53,6 +54,7 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   onOpenThemes,
   favoriteStations,
   onSelectStation,
+  onRestoreDefaultFavorites,
 }) => {
   const { t } = useTranslation();
   // Navigation mode: 'player' (Screenshot 1) vs 'library' (Screenshot 2)
@@ -408,8 +410,8 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     if (activeTrack?.album && activeTrack.album !== 'Drive') {
       return activeTrack.album;
     }
-    return '/mimusica';
-  }, [activeSource, currentStation, currentDriveTrack, activeTrack]);
+    return isDriveConnected ? 'Mi Música' : 'Google Drive';
+  }, [activeSource, currentStation, currentDriveTrack, activeTrack, isDriveConnected]);
 
   // Toggle Fullscreen
   const handleToggleFullscreen = async () => {
@@ -1427,10 +1429,22 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                   )}
 
                   {activeSource === 'radio' && filteredStations.length === 0 && (
-                    <div className="py-8 px-4 text-center text-xs text-gray-400">
-                      {favoriteStations && favoriteStations.length > 0
-                        ? `${t.carMode.noFavoriteStationsFound} "${searchQuery}"`
-                        : t.carMode.noFavoriteStations}
+                    <div className="py-8 px-4 text-center text-xs text-gray-400 flex flex-col items-center gap-3">
+                      <span>
+                        {favoriteStations && favoriteStations.length > 0
+                          ? `${t.carMode.noFavoriteStationsFound} "${searchQuery}"`
+                          : t.carMode.noFavoriteStations}
+                      </span>
+                      {onRestoreDefaultFavorites && (!favoriteStations || favoriteStations.length === 0) && (
+                        <button
+                          type="button"
+                          onClick={onRestoreDefaultFavorites}
+                          className="px-3.5 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/60 text-amber-300 hover:bg-amber-500/30 text-xs font-mono font-bold uppercase transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                        >
+                          <span className="material-symbols-outlined text-sm">restore</span>
+                          <span>Cargar emisoras habituales</span>
+                        </button>
+                      )}
                     </div>
                   )}
 

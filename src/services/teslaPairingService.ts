@@ -1,4 +1,4 @@
-import { doc, setDoc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
 export interface TeslaPairingData {
@@ -104,15 +104,55 @@ export class TeslaPairingService {
    */
   public async savePairedPreferences(
     syncKey: string,
-    data: { favorites: string[]; favoriteStationObjects?: any[]; settings?: any }
+    data: { favorites: string[]; favoriteStationObjects?: any[]; settings?: any; stationPlaytimes?: any }
   ): Promise<void> {
     if (!syncKey) return;
     const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);
     const docRef = doc(db, 'tesla_pairings', cleanKey);
+
+    // Safeguard: Never accidentally wipe existing cloud favorites with an empty array
+    if (!data.favorites || data.favorites.length === 0) {
+      try {
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const current = snap.data();
+          if (Array.isArray(current?.favorites) && current.favorites.length > 0) {
+            console.warn('[TeslaPairingService] Preservando favoritas existentes en la nube frente a sobreescritura vacía.');
+            const { favorites: _f, favoriteStationObjects: _fo, ...rest } = data;
+            await setDoc(docRef, { ...rest, updatedAt: new Date().toISOString() }, { merge: true });
+            return;
+          }
+        }
+      } catch {}
+    }
+
     await setDoc(docRef, {
       ...data,
       updatedAt: new Date().toISOString(),
     }, { merge: true });
+  }
+
+  /**
+   * Retrieve current paired preferences from Firestore directly
+   */
+  public async getPairedPreferences(syncKey: string): Promise<{
+    favorites?: string[];
+    favoriteStationObjects?: any[];
+    settings?: any;
+    stationPlaytimes?: any;
+  } | null> {
+    if (!syncKey) return null;
+    const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);
+    const docRef = doc(db, 'tesla_pairings', cleanKey);
+    try {
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        return snap.data() as any;
+      }
+    } catch (err) {
+      console.warn('[TeslaPairingService] Error reading paired preferences:', err);
+    }
+    return null;
   }
 
   /**

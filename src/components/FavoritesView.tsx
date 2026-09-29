@@ -14,6 +14,7 @@ interface FavoritesViewProps {
   onNavigateToDiscover: () => void;
   user?: any | null;
   onLoginWithGoogle?: () => void;
+  onRestoreDefaultFavorites?: () => void;
 }
 
 export const FavoritesView: React.FC<FavoritesViewProps> = ({
@@ -27,6 +28,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   onNavigateToDiscover,
   user = null,
   onLoginWithGoogle,
+  onRestoreDefaultFavorites,
 }) => {
   const { t } = useTranslation();
 
@@ -93,6 +95,17 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             >
               {t.favorites.exploreStations}
             </button>
+            {onRestoreDefaultFavorites && (
+              <button
+                type="button"
+                onClick={onRestoreDefaultFavorites}
+                className="neo-button bg-[#F59E0B] text-black px-5 py-3 font-mono-tech text-xs font-black uppercase hover:bg-[#d97706] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-2"
+                title="Cargar las emisoras habituales y recomendadas"
+              >
+                <span className="material-symbols-outlined text-base">restore</span>
+                <span>Restaurar emisoras habituales</span>
+              </button>
+            )}
             {!user && onLoginWithGoogle && (
               <button
                 onClick={onLoginWithGoogle}

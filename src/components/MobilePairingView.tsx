@@ -48,13 +48,42 @@ export const MobilePairingView: React.FC<MobilePairingViewProps> = ({ pairCode, 
       }
 
       const syncKey = result.user.email || result.user.uid;
-      const favs = userPrefs?.favorites || [];
-      const favObjs = userPrefs?.favoriteStationObjects || [];
+      let favs: string[] = userPrefs?.favorites || [];
+      let favObjs: any[] = userPrefs?.favoriteStationObjects || [];
+
+      // If Firestore favorites were empty, check mobile phone local storage
+      if (favs.length === 0) {
+        try {
+          const localFavsRaw = localStorage.getItem(`radiostream_favs_${result.user.uid}`) || localStorage.getItem('radiostream_favs');
+          if (localFavsRaw) {
+            const parsed = JSON.parse(localFavsRaw);
+            if (Array.isArray(parsed) && parsed.length > 0) favs = parsed;
+          }
+          const localObjsRaw = localStorage.getItem(`radiostream_fav_objects_${result.user.uid}`) || localStorage.getItem('radiostream_fav_objects');
+          if (localObjsRaw) {
+            const parsedObjs = JSON.parse(localObjsRaw);
+            if (parsedObjs && typeof parsedObjs === 'object') favObjs = Object.values(parsedObjs);
+          }
+        } catch {}
+      }
+
+      // If still empty, check existing paired cloud session
+      if (favs.length === 0) {
+        try {
+          const existingPaired = await teslaPairingService.getPairedPreferences(syncKey);
+          if (existingPaired?.favorites && existingPaired.favorites.length > 0) {
+            favs = existingPaired.favorites;
+            favObjs = existingPaired.favoriteStationObjects || [];
+          }
+        } catch {}
+      }
 
       try {
         await teslaPairingService.savePairedPreferences(syncKey, {
           favorites: favs,
           favoriteStationObjects: favObjs,
+          settings: userPrefs?.settings,
+          stationPlaytimes: userPrefs?.stationPlaytimes,
         });
       } catch (e) {
         console.warn('Could not save paired preferences initial sync:', e);
