@@ -1,8 +1,18 @@
 import { DriveAudioFile } from '../types/drive';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { driveDownloadManager } from './driveDownloadManager';
+import {
+  GOOGLE_CLIENT_ID,
+  OAUTH_SCOPE,
+  initGoogleAuth,
+  requestGoogleAccessToken,
+  getStoredAccessToken,
+  storeAccessToken,
+  clearStoredAccessToken,
+} from './googleDriveAuth';
 
-const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+export const PRODUCTION_CLIENT_ID = GOOGLE_CLIENT_ID;
+const DRIVE_SCOPES = OAUTH_SCOPE;
 
 export class GoogleDriveService {
   private accessToken: string | null = null;
@@ -12,23 +22,17 @@ export class GoogleDriveService {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      try {
-        const savedToken = localStorage.getItem('radiostream_drive_token');
-        const savedExpiry = localStorage.getItem('radiostream_drive_token_expiry');
-        if (savedToken && savedExpiry) {
-          const expiryNum = Number(savedExpiry);
-          if (Date.now() < expiryNum) {
-            this.accessToken = savedToken;
-            this.tokenExpiryTime = expiryNum;
-          }
-        }
-      } catch {}
+      const stored = getStoredAccessToken();
+      if (stored) {
+        this.accessToken = stored;
+        this.tokenExpiryTime = Date.now() + 3500 * 1000;
+      }
       this.checkAndConsumeHashToken();
     }
   }
 
   public hasToken(): boolean {
-    return !!this.accessToken && Date.now() < this.tokenExpiryTime;
+    return !!this.getToken();
   }
 
   public onTokenChange(listener: (hasToken: boolean) => void): () => void {
@@ -53,29 +57,24 @@ export class GoogleDriveService {
   public setAccessToken(token: string, expiresInMs = 3600 * 1000) {
     this.accessToken = token;
     this.tokenExpiryTime = Date.now() + expiresInMs - 300 * 1000;
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('radiostream_drive_token', token);
-        localStorage.setItem('radiostream_drive_token_expiry', String(this.tokenExpiryTime));
-      } catch {}
-    }
+    storeAccessToken(token, Math.round(expiresInMs / 1000));
     this.notifyTokenChange();
   }
 
   public clearAccessToken() {
     this.accessToken = null;
     this.tokenExpiryTime = 0;
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem('radiostream_drive_token');
-        localStorage.removeItem('radiostream_drive_token_expiry');
-      } catch {}
-    }
+    clearStoredAccessToken();
     this.notifyTokenChange();
   }
 
   public getToken(): string | null {
-    if (this.hasToken()) {
+    const stored = getStoredAccessToken();
+    if (stored) {
+      this.accessToken = stored;
+      return stored;
+    }
+    if (this.accessToken && Date.now() < this.tokenExpiryTime) {
       return this.accessToken;
     }
     return null;
@@ -135,6 +134,7 @@ export class GoogleDriveService {
         if (token) {
           const expiresInMs = expiresIn ? Number(expiresIn) * 1000 : 3600 * 1000;
           this.setAccessToken(token, expiresInMs);
+          window.sessionStorage.setItem('gdrive_bearer_token', token);
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
           return token;
         }
@@ -148,7 +148,7 @@ export class GoogleDriveService {
    */
   public redirectToOAuth(): void {
     if (typeof window === 'undefined') return;
-    const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId;
+    const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || PRODUCTION_CLIENT_ID || firebaseConfig.oAuthClientId;
     const redirectUri = window.location.origin + window.location.pathname;
     try {
       localStorage.setItem('radiostream_redirect_initiated', 'true');
@@ -165,44 +165,45 @@ export class GoogleDriveService {
   }
 
   public authenticate(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (typeof window === 'undefined' || !(window as any).google || !(window as any).google.accounts) {
+    return new Promise(async (resolve, reject) => {
+      if (typeof window === 'undefined') {
         reject(new Error('Google Identity Services (GIS) no está disponible en este entorno.'));
         return;
       }
 
-      const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId;
-      if (!clientId) {
-        reject(new Error('oAuthClientId no encontrado en la configuración.'));
+      // Wait up to 3 seconds for Google Identity Services to load if not yet ready
+      let attempts = 0;
+      while ((!(window as any).google || !(window as any).google.accounts?.oauth2) && attempts < 30) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+      }
+
+      if (!(window as any).google || !(window as any).google.accounts?.oauth2) {
+        reject(new Error('Google Identity Services (GIS) no está disponible en este entorno.'));
         return;
       }
 
       try {
-        if (!this.tokenClient) {
-          this.tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: DRIVE_SCOPES,
-            callback: (response: any) => {
-              if (response.error) {
-                reject(new Error(response.error_description || response.error));
-                return;
-              }
-              if (response.access_token) {
-                // Tokens usually expire in 3600s, set safety buffer (e.g., 50 mins)
-                const expiresIn = response.expires_in ? Number(response.expires_in) * 1000 : 3600 * 1000;
-                this.setAccessToken(response.access_token, expiresIn);
-                resolve(this.accessToken!);
-              } else {
-                reject(new Error('No se recibió token de acceso de Google Drive.'));
-              }
-            },
-          });
+        /* Inicializa y solicita token con la función oficial de producción */
+        const client = initGoogleAuth(
+          (token: string) => {
+            this.setAccessToken(token);
+            resolve(token);
+          },
+          (error: any) => {
+            console.error('[OAuth Client Error]:', error);
+            reject(new Error(error?.message || error?.type || 'Error en cliente de autorización Google'));
+          }
+        );
+
+        if (!client) {
+          reject(new Error('No se pudo inicializar el cliente GIS.'));
+          return;
         }
 
-        // Request token and always prompt account selection so user can choose existing accounts or add a new one
-        const reqOptions: any = { prompt: 'select_account' };
-        this.tokenClient.requestAccessToken(reqOptions);
+        requestGoogleAccessToken('select_account');
       } catch (err) {
+        console.error('[OAuth Client Error]:', err);
         reject(err);
       }
     });
@@ -327,9 +328,58 @@ export class GoogleDriveService {
       }
     }
 
-    // 3. Robust Search across all user folders and shared drives
+    // 2.5. Fast Indexed Queries directly via Drive Search Index (Exact & Contains matches)
     const normalize = (s: string) =>
       s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+    try {
+      const exactNames = ['Mi música', 'Mi musica', 'mimusica', 'mymusic', 'Música', 'Musica', 'Music'];
+      for (const nameCandidate of exactNames) {
+        const exactQ = `name = '${nameCandidate}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+        const exactUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(exactQ)}&fields=files(id,name)&pageSize=10&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+        const exactRes = await this.fetchWithBackoff(exactUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (exactRes.ok) {
+          const exactData = await exactRes.json();
+          const found = (exactData.files || []).find((f: any) => normalize(f.name) === normalize(nameCandidate));
+          if (found && found.id) {
+            if (typeof window !== 'undefined') {
+              try { localStorage.setItem('radiostream_drive_folder_id', found.id); } catch {}
+            }
+            return found.id;
+          }
+        }
+      }
+
+      // Contains queries
+      const containsTerms = ['música', 'musica', 'music'];
+      for (const term of containsTerms) {
+        const containsQ = `name contains '${term}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+        const containsUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(containsQ)}&fields=files(id,name)&pageSize=20&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+        const containsRes = await this.fetchWithBackoff(containsUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (containsRes.ok) {
+          const cData = await containsRes.json();
+          const files: { id: string; name: string }[] = cData.files || [];
+          const best = files.find(f => {
+            const n = normalize(f.name);
+            return n === 'mimusica' || n === 'mymusic' || n.includes('mimusica') || n.includes('mymusic') || n === 'musica';
+          });
+          if (best && best.id) {
+            if (typeof window !== 'undefined') {
+              try { localStorage.setItem('radiostream_drive_folder_id', best.id); } catch {}
+            }
+            return best.id;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[GoogleDriveService] Fast indexed search error, continuing with tree scan:', e);
+    }
+
+    // 3. Robust Search across all user folders and shared drives
 
     try {
       let pageToken: string | undefined = undefined;

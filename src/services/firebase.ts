@@ -36,7 +36,7 @@ export const activeFirebaseConfig = {
   firestoreDatabaseId: resolvedDbId,
   storageBucket: (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string) || firebaseConfig.storageBucket,
   messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || firebaseConfig.messagingSenderId,
-  oAuthClientId: (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId,
+  oAuthClientId: (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || firebaseConfig.oAuthClientId || '1094273500016-v1jtdlpm11qhdk1vdbmo1g2o0469r464.apps.googleusercontent.com',
 };
 
 // Initialize Firebase App

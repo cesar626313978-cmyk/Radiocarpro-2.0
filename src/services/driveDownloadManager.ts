@@ -1,3 +1,5 @@
+import { getStoredAccessToken, clearStoredAccessToken } from './googleDriveAuth';
+
 export interface ActiveTrackResource {
   fileId: string;
   blobUrl: string;
@@ -17,7 +19,13 @@ export class DriveDownloadManager {
   /**
    * Descarga binaria con mitigación estricta de cuotas y retry con jitter
    */
-  public async fetchDriveMediaBinary(fileId: string, accessToken: string): Promise<Blob> {
+  public async fetchDriveMediaBinary(fileId: string, accessToken?: string): Promise<Blob> {
+    const effectiveToken = accessToken || getStoredAccessToken() || '';
+
+    if (!effectiveToken) {
+      throw new Error('[DriveAPI] No hay token de autenticación disponible para descargar el archivo.');
+    }
+
     const endpoint = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&acknowledgeAbuse=true`;
     let attempt = 0;
 
@@ -26,12 +34,17 @@ export class DriveDownloadManager {
         const response = await fetch(endpoint, {
           method: 'GET',
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${effectiveToken}`,
           },
         });
 
         if (response.ok) {
           return await response.blob();
+        }
+
+        if (response.status === 401) {
+          clearStoredAccessToken();
+          throw new Error('[DriveAPI] Token expirado o inválido (HTTP 401). Se requiere nueva autorización.');
         }
 
         if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
