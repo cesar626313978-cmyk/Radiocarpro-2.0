@@ -1,4 +1,5 @@
 import { DriveAudioFile } from '../types/drive';
+import { audioCarTelemetry } from './audioCarTelemetry';
 
 /**
  * IndexedDB storage service for Google Drive audio files and metadata.
@@ -167,6 +168,7 @@ export class DriveCacheService {
         saved = true;
       } catch (err: any) {
         if (err && (err.name === 'QuotaExceededError' || err.code === 22)) {
+          audioCarTelemetry.recordQuotaExceeded();
           console.warn('[DriveCacheService] QuotaExceededError detectado. Desalojando blob más antiguo (LRU)...');
           const evicted = await this.evictOldestBlob();
           if (!evicted) {

@@ -1,4 +1,5 @@
 import { getStoredAccessToken, clearStoredAccessToken } from './googleDriveAuth';
+import { audioCarTelemetry } from './audioCarTelemetry';
 
 export interface ActiveTrackResource {
   fileId: string;
@@ -48,6 +49,9 @@ export class DriveDownloadManager {
         }
 
         if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
+          if (response.status === 429) {
+            audioCarTelemetry.recordNetworkThrottling();
+          }
           attempt++;
           if (attempt >= this.MAX_RETRIES) {
             throw new Error(`[DriveDownloadManager] Cuota excedida (HTTP ${response.status}). Reintentos agotados.`);
@@ -83,6 +87,7 @@ export class DriveDownloadManager {
       if (this.activeUrl && this.activeUrl !== this.preloadedUrl) {
         try {
           URL.revokeObjectURL(this.activeUrl);
+          audioCarTelemetry.recordBlobRevocation();
         } catch {}
       }
       this.activeUrl = this.preloadedUrl;
@@ -95,11 +100,13 @@ export class DriveDownloadManager {
     if (this.activeUrl) {
       try {
         URL.revokeObjectURL(this.activeUrl);
+        audioCarTelemetry.recordBlobRevocation();
       } catch {}
       this.activeUrl = null;
     }
 
     this.activeUrl = URL.createObjectURL(blob);
+    audioCarTelemetry.recordBlobCreation(fileId);
     return this.activeUrl;
   }
 
@@ -108,6 +115,7 @@ export class DriveDownloadManager {
     if (this.preloadedUrl) {
       try {
         URL.revokeObjectURL(this.preloadedUrl);
+        audioCarTelemetry.recordBlobRevocation(this.preloadedFileId || undefined);
       } catch {}
       this.preloadedUrl = null;
       this.preloadedFileId = null;
@@ -115,6 +123,7 @@ export class DriveDownloadManager {
 
     this.preloadedUrl = URL.createObjectURL(blob);
     this.preloadedFileId = fileId;
+    audioCarTelemetry.recordBlobCreation(fileId);
     return this.preloadedUrl;
   }
 
@@ -122,12 +131,14 @@ export class DriveDownloadManager {
     if (this.activeUrl) {
       try {
         URL.revokeObjectURL(this.activeUrl);
+        audioCarTelemetry.recordBlobRevocation();
       } catch {}
       this.activeUrl = null;
     }
     if (this.preloadedUrl) {
       try {
         URL.revokeObjectURL(this.preloadedUrl);
+        audioCarTelemetry.recordBlobRevocation(this.preloadedFileId || undefined);
       } catch {}
       this.preloadedUrl = null;
       this.preloadedFileId = null;
