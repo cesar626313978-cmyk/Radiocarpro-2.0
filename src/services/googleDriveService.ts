@@ -9,6 +9,10 @@ import {
   getStoredAccessToken,
   storeAccessToken,
   clearStoredAccessToken,
+  trySilentTokenRefresh,
+  isDriveConnectedPersistently,
+  setUserEmailHint,
+  isStoredTokenExpired,
 } from './googleDriveAuth';
 
 export const PRODUCTION_CLIENT_ID = GOOGLE_CLIENT_ID;
@@ -22,17 +26,23 @@ export class GoogleDriveService {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      const stored = getStoredAccessToken();
-      if (stored) {
-        this.accessToken = stored;
-        this.tokenExpiryTime = Date.now() + 3500 * 1000;
+      if (!isStoredTokenExpired()) {
+        const stored = getStoredAccessToken(true);
+        if (stored) {
+          this.accessToken = stored;
+          this.tokenExpiryTime = Date.now() + 3500 * 1000;
+        }
       }
       this.checkAndConsumeHashToken();
     }
   }
 
   public hasToken(): boolean {
-    return !!this.getToken();
+    return !isStoredTokenExpired() && !!this.getToken();
+  }
+
+  public isTokenExpired(): boolean {
+    return isStoredTokenExpired();
   }
 
   public onTokenChange(listener: (hasToken: boolean) => void): () => void {
@@ -69,7 +79,10 @@ export class GoogleDriveService {
   }
 
   public getToken(): string | null {
-    const stored = getStoredAccessToken();
+    if (isStoredTokenExpired()) {
+      return null;
+    }
+    const stored = getStoredAccessToken(true);
     if (stored) {
       this.accessToken = stored;
       return stored;
@@ -93,6 +106,9 @@ export class GoogleDriveService {
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.email) {
+          setUserEmailHint(data.email);
+        }
         return {
           email: data.email,
           displayName: data.name || data.given_name,
@@ -108,6 +124,9 @@ export class GoogleDriveService {
       if (res.ok) {
         const data = await res.json();
         if (data.user) {
+          if (data.user.emailAddress) {
+            setUserEmailHint(data.user.emailAddress);
+          }
           return {
             email: data.user.emailAddress,
             displayName: data.user.displayName,
@@ -216,8 +235,17 @@ export class GoogleDriveService {
     try {
       const response = await fetch(url, options);
       if (response.status === 401) {
-        console.warn('[GoogleDriveService] Access token expired or invalid (HTTP 401). Clearing token.');
-        this.clearAccessToken();
+        console.warn('[GoogleDriveService] Access token expired or invalid (HTTP 401). Intentando renovación silenciosa...');
+        const refreshedToken = await trySilentTokenRefresh();
+        if (refreshedToken) {
+          console.log('[GoogleDriveService] Token renovado con éxito tras 401, reintentando llamada...');
+          this.setAccessToken(refreshedToken);
+          const newHeaders = new Headers(options.headers || {});
+          newHeaders.set('Authorization', `Bearer ${refreshedToken}`);
+          return this.fetchWithBackoff(url, { ...options, headers: newHeaders }, retries - 1, delay);
+        }
+        // Preservar la sesión y la biblioteca en caché; no borrar las credenciales locales
+        console.warn('[GoogleDriveService] Renovación silenciosa fallida temporalmente tras 401. Preservando estado local.');
         return response;
       }
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {

@@ -104,7 +104,14 @@ export class TeslaPairingService {
    */
   public async savePairedPreferences(
     syncKey: string,
-    data: { favorites: string[]; favoriteStationObjects?: any[]; settings?: any; stationPlaytimes?: any }
+    data: {
+      favorites?: string[];
+      favoriteStationObjects?: any[];
+      settings?: any;
+      stationPlaytimes?: any;
+      driveToken?: string;
+      driveTokenExpiresAt?: number;
+    }
   ): Promise<void> {
     if (!syncKey) return;
     const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);
@@ -140,6 +147,8 @@ export class TeslaPairingService {
     favoriteStationObjects?: any[];
     settings?: any;
     stationPlaytimes?: any;
+    driveToken?: string;
+    driveTokenExpiresAt?: number;
   } | null> {
     if (!syncKey) return null;
     const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);
@@ -160,7 +169,13 @@ export class TeslaPairingService {
    */
   public subscribeToPairedPreferences(
     syncKey: string,
-    onUpdate: (data: { favorites?: string[]; favoriteStationObjects?: any[]; settings?: any }) => void
+    onUpdate: (data: {
+      favorites?: string[];
+      favoriteStationObjects?: any[];
+      settings?: any;
+      driveToken?: string;
+      driveTokenExpiresAt?: number;
+    }) => void
   ): () => void {
     if (!syncKey) return () => {};
     const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);

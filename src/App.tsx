@@ -26,6 +26,7 @@ import { driveAudioEngine } from './services/driveAudioEngine';
 import { googleDriveService } from './services/googleDriveService';
 import { teslaPairingService } from './services/teslaPairingService';
 import { teslaBackgroundService } from './services/teslaBackgroundService';
+import { startTokenHeartbeat } from './services/googleDriveAuth';
 import {
   auth,
   signInWithGoogle,
@@ -356,6 +357,7 @@ export default function App() {
   // Initialize Tesla background audio persistence and steering wheel navigation
   useEffect(() => {
     teslaBackgroundService.init();
+    startTokenHeartbeat();
     audioEngine.setStationNavigationHandlers(
       () => nextStationRef.current(),
       () => prevStationRef.current()
@@ -515,6 +517,12 @@ export default function App() {
       // Apply synchronized remote settings across devices
       if (remoteData?.settings) {
         applyRemoteSettings(remoteData.settings);
+      }
+
+      // Sync cloud drive token if present
+      if (remoteData?.driveToken) {
+        const expiresInMs = remoteData.driveTokenExpiresAt ? Math.max(60000, remoteData.driveTokenExpiresAt - Date.now()) : 3600000;
+        googleDriveService.setAccessToken(remoteData.driveToken, expiresInMs);
       }
 
       // Merge local and remote favorites (Union) so no favorites are ever lost across devices
@@ -700,6 +708,10 @@ export default function App() {
       setIsSyncing(false);
       if (data && data.settings) {
         applyRemoteSettings(data.settings);
+      }
+      if (data && data.driveToken) {
+        const expiresInMs = data.driveTokenExpiresAt ? Math.max(60000, data.driveTokenExpiresAt - Date.now()) : 3600000;
+        googleDriveService.setAccessToken(data.driveToken, expiresInMs);
       }
       if (data && data.stationPlaytimes) {
         setStationPlaytimes(prev => {
@@ -1242,6 +1254,7 @@ export default function App() {
 
           <div className={currentTab === 'drive' ? 'block w-full min-w-0' : 'hidden'}>
             <DriveMusicView
+              isVisible={currentTab === 'drive'}
               onSwitchToRadio={() => handleSelectTab('descubrir')}
               activeSource={activeSource}
               onActivateDriveSource={() => {

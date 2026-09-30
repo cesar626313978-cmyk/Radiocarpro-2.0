@@ -2,6 +2,7 @@ import { DriveAudioFile, DrivePlaybackStatus } from '../types/drive';
 import { driveCacheService } from './driveCacheService';
 import { driveDownloadManager } from './driveDownloadManager';
 import { googleDriveService } from './googleDriveService';
+import { trySilentTokenRefresh, getStoredAccessToken, clearStoredAccessToken } from './googleDriveAuth';
 import { teslaBackgroundService } from './teslaBackgroundService';
 import { AudioNormalizer } from './audioNormalizerNode';
 
@@ -1036,7 +1037,10 @@ export class DriveAudioEngine {
     this.timeListeners.forEach(l => l(0, this.duration));
     this.setStatus('buffering');
 
-    const authToken = token || googleDriveService.getToken() || '';
+    let authToken = token || googleDriveService.getToken() || getStoredAccessToken(true) || '';
+    if (!authToken) {
+      authToken = (await trySilentTokenRefresh()) || getStoredAccessToken(true) || '';
+    }
 
     try {
       // 1. Comprobar caché de IndexedDB primero
@@ -1050,7 +1054,12 @@ export class DriveAudioEngine {
           driveCacheService.saveBlob(track.id, blob).catch(() => {});
         } else {
           if (!authToken) {
-            throw new Error('Pista no disponible sin conexión');
+            authToken = (await trySilentTokenRefresh()) || getStoredAccessToken(true) || '';
+          }
+          if (!authToken) {
+            const err: any = new Error('Pista no disponible sin conexión');
+            err.code = 'TOKEN_EXPIRED';
+            throw err;
           }
           blob = await driveDownloadManager.fetchDriveMediaBinary(track.id, authToken);
           driveCacheService.saveBlob(track.id, blob).catch(() => {});
@@ -1084,8 +1093,29 @@ export class DriveAudioEngine {
       this.updateMediaSessionMetadata(track);
 
       this.triggerForwardBuffer();
-    } catch (err) {
-      console.error('[DriveAudioEngine] Error reproduciendo pista:', err);
+    } catch (err: any) {
+      const isTokenExpired =
+        err?.code === 'TOKEN_EXPIRED' ||
+        err?.message?.includes('401') ||
+        err?.message?.includes('Token expirado') ||
+        err?.message?.includes('Pista no disponible sin conexión');
+
+      if (isTokenExpired) {
+        console.warn('[DriveAudioEngine] Pista requiere conexión activa o renovación de token (401).', err?.message || err);
+        clearStoredAccessToken();
+        googleDriveService.clearAccessToken();
+        this.setStatus('paused');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('gdrive:token-expired', {
+              detail: { trackId: track.id, trackName: track.name },
+            })
+          );
+        }
+        return;
+      }
+
+      console.warn('[DriveAudioEngine] Error reproduciendo pista:', err);
       if (!track.id.startsWith('track-')) {
         console.log('[DriveAudioEngine] Fallback a audio sintético de respaldo...');
         const synthBlob = this.generateSynthWaveBlob(track.id);

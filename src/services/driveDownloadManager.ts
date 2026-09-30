@@ -1,4 +1,4 @@
-import { getStoredAccessToken, clearStoredAccessToken } from './googleDriveAuth';
+import { getStoredAccessToken, clearStoredAccessToken, trySilentTokenRefresh, syncTokenFromCloud } from './googleDriveAuth';
 import { audioCarTelemetry } from './audioCarTelemetry';
 
 export interface ActiveTrackResource {
@@ -21,10 +21,12 @@ export class DriveDownloadManager {
    * Descarga binaria con mitigación estricta de cuotas y retry con jitter
    */
   public async fetchDriveMediaBinary(fileId: string, accessToken?: string): Promise<Blob> {
-    const effectiveToken = accessToken || getStoredAccessToken() || '';
+    const effectiveToken = accessToken || getStoredAccessToken(true) || '';
 
     if (!effectiveToken) {
-      throw new Error('[DriveAPI] No hay token de autenticación disponible para descargar el archivo.');
+      const err: any = new Error('[DriveAPI] No hay token de autenticación disponible para descargar el archivo.');
+      err.code = 'TOKEN_EXPIRED';
+      throw err;
     }
 
     const endpoint = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&acknowledgeAbuse=true`;
@@ -44,8 +46,25 @@ export class DriveDownloadManager {
         }
 
         if (response.status === 401) {
+          console.warn('[DriveAPI] Token 401 detectado, limpiando token inválido...');
           clearStoredAccessToken();
-          throw new Error('[DriveAPI] Token expirado o inválido (HTTP 401). Se requiere nueva autorización.');
+          const refreshedToken = await syncTokenFromCloud();
+          if (refreshedToken) {
+            console.log('[DriveAPI] Token renovado desde la nube tras 401, reintentando descarga...');
+            const retryRes = await fetch(endpoint, {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${refreshedToken}`,
+              },
+            });
+            if (retryRes.ok) {
+              return await retryRes.blob();
+            }
+          }
+          console.warn('[DriveAPI] Token no disponible (401). Se requiere renovación por parte del usuario.');
+          const err: any = new Error('[DriveAPI] Token expirado o temporalmente no disponible (HTTP 401).');
+          err.code = 'TOKEN_EXPIRED';
+          throw err;
         }
 
         if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
@@ -68,7 +87,8 @@ export class DriveDownloadManager {
         }
 
         throw new Error(`[DriveAPI] Error HTTP fatal: ${response.status} ${response.statusText}`);
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.code === 'TOKEN_EXPIRED') throw err;
         if (attempt >= this.MAX_RETRIES - 1) throw err;
         attempt++;
         await new Promise((resolve) => setTimeout(resolve, 1500));

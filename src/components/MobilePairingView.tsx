@@ -84,6 +84,8 @@ export const MobilePairingView: React.FC<MobilePairingViewProps> = ({ pairCode, 
           favoriteStationObjects: favObjs,
           settings: userPrefs?.settings,
           stationPlaytimes: userPrefs?.stationPlaytimes,
+          driveToken: token,
+          driveTokenExpiresAt: Date.now() + 3600 * 1000,
         });
       } catch (e) {
         console.warn('Could not save paired preferences initial sync:', e);

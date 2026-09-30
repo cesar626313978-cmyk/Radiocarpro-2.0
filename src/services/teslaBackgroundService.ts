@@ -15,6 +15,8 @@
  * 5. Screen Wake Lock: Keeps the car display alive and high-performing while in view.
  */
 
+import { startTokenHeartbeat, syncTokenFromCloud } from './googleDriveAuth';
+
 type HeartbeatCallback = () => void;
 
 class TeslaBackgroundService {
@@ -43,6 +45,33 @@ class TeslaBackgroundService {
     this.isInitialized = true;
     this.initWorker();
     this.requestWakeLock();
+    startTokenHeartbeat();
+
+    // Comprobar y renovar proactivamente cada 3 minutos (180s) en el hilo del worker no estrangulado
+    let driveTickCount = 0;
+    this.registerHeartbeat(() => {
+      driveTickCount++;
+      if (driveTickCount >= 180) {
+        driveTickCount = 0;
+        const expiresAt = parseInt(
+          (typeof window !== 'undefined' && (
+            window.sessionStorage.getItem('gdrive_token_expires_at') ||
+            window.localStorage.getItem('gdrive_token_expires_at') ||
+            window.localStorage.getItem('radiostream_drive_token_expiry')
+          )) || '0',
+          10
+        );
+        const hasToken = typeof window !== 'undefined' && !!(
+          window.sessionStorage.getItem('gdrive_bearer_token') ||
+          window.localStorage.getItem('gdrive_bearer_token') ||
+          window.localStorage.getItem('radiostream_drive_token')
+        );
+        // Si hay token y faltan menos de 25 min o ya expiró, sincronizar en segundo plano desde Firestore
+        if (hasToken && (expiresAt === 0 || Date.now() >= (expiresAt - 25 * 60 * 1000))) {
+          syncTokenFromCloud().catch(() => {});
+        }
+      }
+    });
   }
 
   /**

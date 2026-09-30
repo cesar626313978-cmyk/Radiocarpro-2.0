@@ -3,6 +3,8 @@ import { RadioStation } from '../types/radio';
 import { DriveAudioFile } from '../types/drive';
 import { driveAudioEngine } from '../services/driveAudioEngine';
 import { googleDriveService } from '../services/googleDriveService';
+import { isDriveConnectedPersistently } from '../services/googleDriveAuth';
+import { driveCacheService } from '../services/driveCacheService';
 import { teslaBackgroundService } from '../services/teslaBackgroundService';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { RealisticSpaceCosmos } from './RealisticSpaceCosmos';
@@ -107,9 +109,31 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Drive authentication & playlist state
-  const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => googleDriveService.hasToken());
-  const [enginePlaylist, setEnginePlaylist] = useState<DriveAudioFile[]>(() => driveAudioEngine.getPlaylist());
+  // Drive authentication & playlist state with persistent vehicle cache support
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => {
+    return googleDriveService.hasToken() || isDriveConnectedPersistently();
+  });
+  const [enginePlaylist, setEnginePlaylist] = useState<DriveAudioFile[]>(() => {
+    const list = driveAudioEngine.getPlaylist();
+    if (list && list.length > 0) return list;
+    const cached = driveCacheService.getCachedLibrarySync();
+    if (cached) {
+      const pl = (cached.files && cached.files.length > 0) ? cached.files : (cached.allRecursiveFiles || []);
+      if (pl.length > 0) {
+        driveAudioEngine.setPlaylist(pl);
+        return pl;
+      }
+    }
+    return [];
+  });
+
+  // Listen to drive token state changes dynamically
+  useEffect(() => {
+    const unsub = googleDriveService.onTokenChange(hasTok => {
+      setIsDriveConnected(hasTok || isDriveConnectedPersistently());
+    });
+    return unsub;
+  }, []);
 
   // High-precision playback timing & duration synchronized directly with real audio engine
   const [playbackCurrentTime, setPlaybackCurrentTime] = useState<number>(() => driveAudioEngine.getCurrentTime() || 0);
@@ -377,26 +401,29 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     if (playbackStatus === 'error') {
       return 'Emisora no disponible';
     }
-    if (!isDriveConnected && activeSource !== 'drive' && !isPlaying) {
-      return 'Desconectado de Drive';
-    }
     if (activeSource === 'radio' && currentStation) {
       return currentStation.name;
     }
-    return activeTrack?.name.replace(/\.(mp3|wav|m4a|flac|aac|ogg)$/i, '') || 'Desconectado de Drive';
+    if (activeTrack) {
+      return activeTrack.name.replace(/\.(mp3|wav|m4a|flac|aac|ogg)$/i, '');
+    }
+    if (isDriveConnected) {
+      return 'Mi Música (Google Drive)';
+    }
+    return 'Google Drive';
   }, [isDriveConnected, activeSource, isPlaying, currentStation, activeTrack, playbackStatus]);
 
   const displaySubtitle = useMemo(() => {
     if (playbackStatus === 'error') {
       return errorMessage || 'El enlace está roto o no hay conexión de internet';
     }
-    if (!isDriveConnected && activeSource !== 'drive' && !isPlaying) {
-      return 'Pulsa el botón naranja "Conectar Drive"';
-    }
     if (activeSource === 'radio' && currentStation) {
       return `${currentStation.country} • ${currentStation.genre || 'Radio en Directo'}`;
     }
-    return activeTrack?.artist || 'AudioCar Synth Collective';
+    if (activeTrack) {
+      return activeTrack.artist || activeTrack.album || 'AudioCar Playback';
+    }
+    return isDriveConnected ? 'Biblioteca lista en vehículo' : 'Pulsa "Conectar Drive" para escuchar tu música';
   }, [isDriveConnected, activeSource, isPlaying, currentStation, activeTrack, playbackStatus, errorMessage]);
 
   // Folder name in playback (or radio station)
