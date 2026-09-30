@@ -1384,7 +1384,7 @@ export default function App() {
         </main>
       </div>
 
-      {currentTab === 'coche' && (
+      <div className={currentTab === 'coche' ? 'block fixed inset-0 z-50 bg-[#131313]' : 'hidden'}>
         <CarModeView
           activeSource={activeSource}
           currentStation={currentStation}
@@ -1435,7 +1435,7 @@ export default function App() {
           onSelectStation={handleTuneToStation}
           onRestoreDefaultFavorites={handleRestoreDefaultFavorites}
         />
-      )}
+      </div>
 
       {/* Global Fixed Player Bar */}
       <GlobalPlayerBar
