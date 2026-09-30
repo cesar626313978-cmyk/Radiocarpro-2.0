@@ -984,14 +984,15 @@ export default function App() {
         driveAudioEngine.resume();
         setIsPlaying(true);
       } else {
-        // If idle/stopped, play currentTrack or the first track of the playlist
-        const trackToPlay = currentDriveTrack || driveAudioEngine.getPlaylist()?.[0];
+        // If idle/stopped, play currentTrack or the track at currentIndex, or the first track of the playlist
+        const currentEngineTrack = driveAudioEngine.getCurrentTrack();
+        const playlist = driveAudioEngine.getPlaylist();
+        const curIdx = driveAudioEngine.getCurrentIndex();
+        const trackToPlay = currentDriveTrack || currentEngineTrack || (curIdx >= 0 && playlist[curIdx]) || playlist[0];
         if (trackToPlay) {
           const token = googleDriveService.getToken();
-          if (token) {
-            driveAudioEngine.playTrack(trackToPlay, token);
-            setIsPlaying(true);
-          }
+          driveAudioEngine.playTrack(trackToPlay, token || undefined);
+          setIsPlaying(true);
         }
       }
       return;
@@ -1303,6 +1304,7 @@ export default function App() {
           onConnectDrive={() => {
             handleSelectTab('drive');
           }}
+          drivePlaylist={driveAudioEngine.getPlaylist()}
           onSelectDriveTrack={(track, index) => {
             audioEngine.cleanupAudio();
             setIsPlaying(false);

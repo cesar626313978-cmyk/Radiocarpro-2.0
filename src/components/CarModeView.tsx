@@ -138,22 +138,37 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   // High-precision playback timing & duration synchronized directly with real audio engine
   const [playbackCurrentTime, setPlaybackCurrentTime] = useState<number>(() => driveAudioEngine.getCurrentTime() || 0);
   const [playbackDuration, setPlaybackDuration] = useState<number>(() => driveAudioEngine.getDuration() || 0);
+  const [engineCurrentTrack, setEngineCurrentTrack] = useState<DriveAudioFile | null>(() => driveAudioEngine.getCurrentTrack());
   const isScrubbingRef = useRef<boolean>(false);
   const orbRef = useRef<HTMLDivElement>(null);
-  const [selectedDemoIndex, setSelectedDemoIndex] = useState<number>(1); // Index 1 is Neon Supercharger as in screenshot 2!
+
+  // Synchronize directly with DriveAudioEngine track changes
+  useEffect(() => {
+    const unsub = driveAudioEngine.onTrackChange(track => {
+      setEngineCurrentTrack(track);
+    });
+    return unsub;
+  }, []);
 
   // Full unified track list: user's real Drive songs if loaded, otherwise empty array
   const allTracks = useMemo<DriveAudioFile[]>(() => {
     if (drivePlaylist && drivePlaylist.length > 0) return drivePlaylist;
     if (enginePlaylist && enginePlaylist.length > 0) return enginePlaylist;
+    const engineList = driveAudioEngine.getPlaylist();
+    if (engineList && engineList.length > 0) return engineList;
     return [];
   }, [drivePlaylist, enginePlaylist]);
 
-  // Active track determination
+  // Active track determination - single synchronized source of truth
   const activeTrack = useMemo<DriveAudioFile | null>(() => {
     if (currentDriveTrack) return currentDriveTrack;
-    return allTracks[selectedDemoIndex] || allTracks[0] || null;
-  }, [currentDriveTrack, allTracks, selectedDemoIndex]);
+    if (engineCurrentTrack) return engineCurrentTrack;
+    const directTrack = driveAudioEngine.getCurrentTrack();
+    if (directTrack) return directTrack;
+    const curIdx = driveAudioEngine.getCurrentIndex();
+    if (curIdx >= 0 && allTracks[curIdx]) return allTracks[curIdx];
+    return allTracks[0] || null;
+  }, [currentDriveTrack, engineCurrentTrack, allTracks]);
 
   // Filtered tracks for Library view search
   const filteredTracks = useMemo(() => {
@@ -205,10 +220,10 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   // Ensure drive engine has playlist populated with allTracks
   useEffect(() => {
     const curr = driveAudioEngine.getPlaylist();
-    if (!curr || curr.length === 0) {
-      driveAudioEngine.setPlaylist(allTracks, selectedDemoIndex);
+    if ((!curr || curr.length === 0) && allTracks.length > 0) {
+      driveAudioEngine.setPlaylist(allTracks, 0);
     }
-  }, [allTracks, selectedDemoIndex]);
+  }, [allTracks]);
 
   // Track change sync ref
   const prevTrackIdRef = useRef<string | undefined>(activeTrack?.id);
@@ -459,7 +474,6 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
 
   // Play a specific track from the Biblioteca list
   const handleSelectTrack = (track: DriveAudioFile, index: number) => {
-    setSelectedDemoIndex(index);
     if (track.duration) {
       setPlaybackDuration(track.duration);
     }
@@ -1071,8 +1085,6 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         driveAudioEngine.playPrev(true);
                       } else if (onPrev) {
                         onPrev();
-                      } else {
-                        setSelectedDemoIndex(prev => (prev - 1 + allTracks.length) % allTracks.length);
                       }
                     }}
                     className="w-[48px] xs:w-[60px] sm:w-[84px] h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"
@@ -1107,8 +1119,6 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
                         driveAudioEngine.playNext(true);
                       } else if (onNext) {
                         onNext();
-                      } else {
-                        setSelectedDemoIndex(prev => (prev + 1) % allTracks.length);
                       }
                     }}
                     className="w-[48px] xs:w-[60px] sm:w-[84px] h-10 xs:h-13 sm:h-17 rounded-xl bg-[#051522]/90 border border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-between p-1 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.5)] active:scale-95"

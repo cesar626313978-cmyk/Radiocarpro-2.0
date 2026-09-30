@@ -70,6 +70,11 @@ export class DriveAudioEngine {
   private isShuffle = false;
   private isRepeat = false;
 
+  // Race condition protection & network cancellation
+  private playbackSequenceNumber = 0;
+  private currentAbortController: AbortController | null = null;
+  private forwardBufferAbortController: AbortController | null = null;
+
   private statusListeners: Array<(status: DrivePlaybackStatus) => void> = [];
   private timeListeners: Array<(time: number, duration: number) => void> = [];
   private trackListeners: Array<(track: DriveAudioFile | null) => void> = [];
@@ -464,23 +469,7 @@ export class DriveAudioEngine {
 
       if (this.activeSlot === slot) {
         console.warn('[DriveAudioEngine] Audio element error in active slot:', err?.message);
-        if (this.currentTrack && !this.hasAttemptedRecovery) {
-          this.hasAttemptedRecovery = true;
-          setTimeout(() => {
-            if (this.currentTrack) {
-              const token = googleDriveService.getToken();
-              this.playTrack(this.currentTrack, token || undefined);
-            }
-          }, 300);
-          return;
-        }
-
-        if (this.playlist.length > 1 && !this.isTransitioning) {
-          console.log('[DriveAudioEngine] Pasando a la siguiente pista tras error de reproducción...');
-          setTimeout(() => this.playNext(false), 500);
-        } else {
-          this.setStatus('error');
-        }
+        this.setStatus('error');
       }
     });
   }
@@ -800,6 +789,14 @@ export class DriveAudioEngine {
     const targetTrack = this.playlist[targetIdx];
     if (!targetTrack) return;
 
+    // Si el usuario pulsó Siguiente / Anterior manualmente, reproducir de inmediato sin esperar crossfade
+    if (userInitiated) {
+      this.cancelCrossfade();
+      const token = googleDriveService.getToken();
+      await this.playTrack(targetTrack, token || undefined);
+      return;
+    }
+
     if (this.isCrossfading || this.isTransitioning) {
       this.cancelCrossfade();
     }
@@ -818,65 +815,23 @@ export class DriveAudioEngine {
 
     let transitionDurationMs = 350;
     if (this.crossfadeSeconds > 0) {
-      const sec = userInitiated
-        ? Math.min(this.crossfadeSeconds, 2.0)
-        : this.crossfadeSeconds;
-      transitionDurationMs = Math.max(500, sec * 1000);
+      transitionDurationMs = Math.max(500, this.crossfadeSeconds * 1000);
     }
 
-    if (!userInitiated && currentEl && isFinite(currentEl.duration) && currentEl.duration > 0) {
+    if (currentEl && isFinite(currentEl.duration) && currentEl.duration > 0) {
       const remainingMs = Math.max(400, (currentEl.duration - currentEl.currentTime - 0.25) * 1000);
       transitionDurationMs = Math.min(transitionDurationMs, remainingMs);
     }
 
     // Paso 1: Asegurar que la pista objetivo esté cargada en la pletina inactiva
-    let isTargetReady = (this.hasPreloadedNext && this.nextTrack?.id === targetTrack.id && nextEl.src && nextEl.readyState >= 2);
+    const isTargetReady = (this.hasPreloadedNext && this.nextTrack?.id === targetTrack.id && nextEl.src && nextEl.readyState >= 2);
 
     if (!isTargetReady) {
-      try {
-        let blob = await driveCacheService.getBlob(targetTrack.id);
-        if (!blob) {
-          if (targetTrack.id.startsWith('track-')) {
-            blob = this.generateSynthWaveBlob(targetTrack.id);
-            driveCacheService.saveBlob(targetTrack.id, blob).catch(() => {});
-          } else {
-            const token = googleDriveService.getToken();
-            if (token) {
-              blob = await driveDownloadManager.fetchDriveMediaBinary(targetTrack.id, token);
-              driveCacheService.saveBlob(targetTrack.id, blob).catch(() => {});
-            }
-          }
-        }
-
-        if (blob) {
-          const blobUrl = driveDownloadManager.registerActivePlayback(targetTrack.id, blob);
-          nextEl.src = blobUrl;
-          nextEl.preload = 'auto';
-          nextEl.load();
-
-          await new Promise<void>(resolve => {
-            if (nextEl.readyState >= 2) {
-              resolve();
-              return;
-            }
-            const onReady = () => {
-              nextEl.removeEventListener('canplay', onReady);
-              nextEl.removeEventListener('loadeddata', onReady);
-              resolve();
-            };
-            nextEl.addEventListener('canplay', onReady, { once: true });
-            nextEl.addEventListener('loadeddata', onReady, { once: true });
-            setTimeout(resolve, 350);
-          });
-        }
-      } catch (loadErr) {
-        console.warn('[DriveAudioEngine] Error preparando pista para transición:', loadErr);
-        this.isTransitioning = false;
-        this.isTransitionInProgress = false;
-        const token = googleDriveService.getToken();
-        await this.playTrack(targetTrack, token || undefined);
-        return;
-      }
+      this.isTransitioning = false;
+      this.isTransitionInProgress = false;
+      const token = googleDriveService.getToken();
+      await this.playTrack(targetTrack, token || undefined);
+      return;
     }
 
     // Paso 2: Iniciar pletina objetivo con ganancia 0 mientras la actual continúa reproduciéndose
@@ -891,27 +846,11 @@ export class DriveAudioEngine {
     try {
       await nextEl.play();
     } catch (playErr) {
-      console.warn('[DriveAudioEngine] Error al iniciar slot inactivo, fallback a slot activo:', playErr);
-      try {
-        currentEl.src = nextEl.src;
-        currentEl.currentTime = 0;
-        currentEl.volume = this.volume;
-        if (currentGain) currentGain.gain.value = 1.0;
-        await currentEl.play();
-      } catch (err2) {
-        console.error('[DriveAudioEngine] Playback fallback failed:', err2);
-      }
-      this.currentIndex = targetIdx;
-      this.currentTrack = targetTrack;
-      this.currentTime = 0;
-      this.duration = targetTrack.duration || 184;
-      this.currentTrackDuration = this.duration;
-      this.trackListeners.forEach(l => l(targetTrack));
-      this.timeListeners.forEach(l => l(0, this.duration));
-      this.setStatus('playing');
+      console.warn('[DriveAudioEngine] Error al iniciar slot inactivo, cambiando directamente:', playErr);
       this.isTransitioning = false;
       this.isTransitionInProgress = false;
-      this.triggerForwardBuffer();
+      const token = googleDriveService.getToken();
+      await this.playTrack(targetTrack, token || undefined);
       return;
     }
 
@@ -978,7 +917,6 @@ export class DriveAudioEngine {
         if (nextGain) nextGain.gain.value = 1.0;
 
         this.planNextTrack();
-        this.triggerForwardBuffer();
       }
     }, 20);
   }
@@ -1012,9 +950,32 @@ export class DriveAudioEngine {
   }
 
   public async playTrack(track: DriveAudioFile, token?: string) {
+    // 1. Cancelar crossfade y descargas previas para respuesta inmediata sin carreras
     this.cancelCrossfade();
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
+    if (this.forwardBufferAbortController) {
+      this.forwardBufferAbortController.abort();
+      this.forwardBufferAbortController = null;
+    }
+
+    const abortController = new AbortController();
+    this.currentAbortController = abortController;
+    const thisRequestId = ++this.playbackSequenceNumber;
+
     this.initAudioGraph();
     this.primeAudioDecks();
+
+    // 2. DETENER y silenciar inmediatamente ambas pletinas para que la canción anterior pare al instante
+    const activeEl = this.getActiveElement();
+    const inactiveEl = this.getInactiveElement();
+    try {
+      activeEl.pause();
+      inactiveEl.pause();
+      inactiveEl.src = '';
+    } catch {}
 
     const foundIdx = this.playlist.findIndex(t => t.id === track.id);
     if (foundIdx !== -1) {
@@ -1039,40 +1000,38 @@ export class DriveAudioEngine {
 
     let authToken = token || googleDriveService.getToken() || getStoredAccessToken(true) || '';
     if (!authToken) {
-      authToken = (await trySilentTokenRefresh()) || getStoredAccessToken(true) || '';
+      authToken = (await trySilentTokenRefresh(undefined, true).catch(() => null)) || getStoredAccessToken(true) || '';
     }
 
     try {
-      // 1. Comprobar caché de IndexedDB primero
+      // 3. Comprobar caché de IndexedDB primero para reproducción instantánea (0ms)
       let blob = await driveCacheService.getBlob(track.id);
       let isCached = true;
 
       if (!blob) {
         isCached = false;
-        if (track.id.startsWith('track-')) {
-          blob = this.generateSynthWaveBlob(track.id);
-          driveCacheService.saveBlob(track.id, blob).catch(() => {});
-        } else {
-          if (!authToken) {
-            authToken = (await trySilentTokenRefresh()) || getStoredAccessToken(true) || '';
-          }
-          if (!authToken) {
-            const err: any = new Error('Pista no disponible sin conexión');
-            err.code = 'TOKEN_EXPIRED';
-            throw err;
-          }
-          blob = await driveDownloadManager.fetchDriveMediaBinary(track.id, authToken);
-          driveCacheService.saveBlob(track.id, blob).catch(() => {});
+        if (!authToken) {
+          authToken = (await trySilentTokenRefresh(undefined, true).catch(() => null)) || getStoredAccessToken(true) || '';
         }
+        if (!authToken) {
+          const err: any = new Error('Sesión de Google Drive expirada');
+          err.code = 'TOKEN_EXPIRED';
+          throw err;
+        }
+
+        blob = await driveDownloadManager.fetchDriveMediaBinary(track.id, authToken, abortController.signal);
+        await driveCacheService.saveBlob(track.id, blob).catch(() => {});
+      }
+
+      // 4. Si el usuario pulsó otra canción mientras se descargaba esta, descartar silenciosamente
+      if (this.playbackSequenceNumber !== thisRequestId || abortController.signal.aborted) {
+        return;
       }
 
       track.isCached = isCached;
 
-      // Salvaguarda 2: Techo de RAM Estricto - Máx 2 Blob URLs (promueve o purga previo)
+      // Salvaguarda 2: Techo de RAM Estricto (Máx 2 Blob URLs simultáneos)
       const blobUrl = driveDownloadManager.registerActivePlayback(track.id, blob);
-
-      const activeEl = this.getActiveElement();
-      const inactiveEl = this.getInactiveElement();
 
       inactiveEl.pause();
       inactiveEl.volume = 0;
@@ -1088,20 +1047,31 @@ export class DriveAudioEngine {
       }
 
       await activeEl.play();
+
+      if (this.playbackSequenceNumber !== thisRequestId || abortController.signal.aborted) {
+        activeEl.pause();
+        return;
+      }
+
       this.setStatus('playing');
       this.hasAttemptedRecovery = false;
       this.updateMediaSessionMetadata(track);
-
-      this.triggerForwardBuffer();
     } catch (err: any) {
+      if (this.playbackSequenceNumber !== thisRequestId || abortController.signal.aborted || err?.name === 'AbortError') {
+        return; // Cancelación normal por selección de otra pista
+      }
+
+      activeEl.pause();
+      inactiveEl.pause();
+
       const isTokenExpired =
         err?.code === 'TOKEN_EXPIRED' ||
         err?.message?.includes('401') ||
         err?.message?.includes('Token expirado') ||
-        err?.message?.includes('Pista no disponible sin conexión');
+        err?.message?.includes('Sesión de Google Drive expirada');
 
       if (isTokenExpired) {
-        console.warn('[DriveAudioEngine] Pista requiere conexión activa o renovación de token (401).', err?.message || err);
+        console.warn('[DriveAudioEngine] Pista requiere renovación de sesión (401).', err?.message || err);
         clearStoredAccessToken();
         googleDriveService.clearAccessToken();
         this.setStatus('paused');
@@ -1116,70 +1086,58 @@ export class DriveAudioEngine {
       }
 
       console.warn('[DriveAudioEngine] Error reproduciendo pista:', err);
-      if (!track.id.startsWith('track-')) {
-        console.log('[DriveAudioEngine] Fallback a audio sintético de respaldo...');
-        const synthBlob = this.generateSynthWaveBlob(track.id);
-        const synthUrl = driveDownloadManager.registerActivePlayback(track.id, synthBlob);
-        const activeEl = this.getActiveElement();
-        activeEl.src = synthUrl;
-        activeEl.volume = this.volume;
-        activeEl.play().then(() => {
-          this.setStatus('playing');
-        }).catch(() => {
-          this.setStatus('error');
-        });
-      } else {
-        this.setStatus('error');
-      }
+      // NUNCA reproducir tonos sintetizados falsos; marcar error formalmente
+      this.setStatus('error');
     }
   }
 
   /**
-   * Búfer progresivo para conducción en vehículo
+   * Búfer progresivo para conducción en vehículo (precarga a demanda de solo 1 pista siguiente)
    */
   public async triggerForwardBuffer() {
     if (this.isForwardBuffering || this.playlist.length <= 1) return;
+    if (this.status !== 'playing') return;
+
+    if (this.forwardBufferAbortController) {
+      this.forwardBufferAbortController.abort();
+      this.forwardBufferAbortController = null;
+    }
+    const abortCtrl = new AbortController();
+    this.forwardBufferAbortController = abortCtrl;
+
     const token = googleDriveService.getToken();
+    if (!token) return;
 
     this.isForwardBuffering = true;
     try {
-      const bufferLimit = Math.min(this.forwardBufferCount, this.playlist.length - 1);
       const immediateNextIdx = (this.plannedNextIndex !== null && this.plannedNextIndex >= 0 && this.plannedNextIndex < this.playlist.length)
         ? this.plannedNextIndex
         : this.computeNextIndex();
       this.plannedNextIndex = immediateNextIdx;
 
-      for (let offset = 1; offset <= bufferLimit; offset++) {
-        const nextIdx = offset === 1 ? immediateNextIdx : (this.currentIndex + offset) % this.playlist.length;
-        const trackToBuffer = this.playlist[nextIdx];
-        if (!trackToBuffer) continue;
+      // Precargar ÚNICAMENTE 1 pista siguiente para no saturar ancho de banda ni cuotas de Drive
+      const trackToBuffer = this.playlist[immediateNextIdx];
+      if (!trackToBuffer) return;
 
-        const alreadyCached = await driveCacheService.isCached(trackToBuffer.id);
-        if (!alreadyCached) {
-          try {
-            let blob: Blob;
-            if (trackToBuffer.id.startsWith('track-')) {
-              blob = this.generateSynthWaveBlob(trackToBuffer.id);
-            } else {
-              if (!token) break;
-              blob = await driveDownloadManager.fetchDriveMediaBinary(trackToBuffer.id, token);
-            }
-            await driveCacheService.saveBlob(trackToBuffer.id, blob);
-            trackToBuffer.isCached = true;
-            this.playlistListeners.forEach(l => l([...this.playlist]));
-          } catch (fetchErr) {
-            console.warn(`[DriveAudioEngine] Buffer notice for track ${trackToBuffer.name}:`, fetchErr);
-            break;
-          }
-        } else if (!trackToBuffer.isCached) {
-          trackToBuffer.isCached = true;
-          this.playlistListeners.forEach(l => l([...this.playlist]));
-        }
+      const alreadyCached = await driveCacheService.isCached(trackToBuffer.id);
+      if (!alreadyCached) {
+        const blob = await driveDownloadManager.fetchDriveMediaBinary(trackToBuffer.id, token, abortCtrl.signal);
+        if (abortCtrl.signal.aborted) return;
+        await driveCacheService.saveBlob(trackToBuffer.id, blob);
+        trackToBuffer.isCached = true;
+        this.playlistListeners.forEach(l => l([...this.playlist]));
+      } else if (!trackToBuffer.isCached) {
+        trackToBuffer.isCached = true;
+        this.playlistListeners.forEach(l => l([...this.playlist]));
+      }
 
-        // Si es la pista inmediata, pre-preparar si la salvaguarda 1 lo permite
-        if (offset === 1 && !this.hasPreloadedNext && driveDownloadManager.canPreloadNext(this.currentTime, this.duration)) {
-          this.prepareNextTrack().catch(() => {});
-        }
+      // Si la salvaguarda 1 lo permite, preparar en la pletina inactiva
+      if (!this.hasPreloadedNext && driveDownloadManager.canPreloadNext(this.currentTime, this.duration)) {
+        this.prepareNextTrack().catch(() => {});
+      }
+    } catch (fetchErr: any) {
+      if (fetchErr?.name !== 'AbortError') {
+        console.warn('[DriveAudioEngine] Buffer notice:', fetchErr?.message || fetchErr);
       }
     } finally {
       this.isForwardBuffering = false;
@@ -1200,30 +1158,41 @@ export class DriveAudioEngine {
     const activeEl = this.getActiveElement();
     activeEl.volume = this.volume;
 
-    if (activeEl.src && activeEl.src !== window.location.href) {
+    // Verificar si activeEl tiene cargada la pista actual
+    if (activeEl.src && activeEl.src !== window.location.href && !activeEl.ended && this.currentTrack && activeEl.readyState >= 2) {
       activeEl.play().then(() => {
         this.setStatus('playing');
       }).catch(err => {
-        console.warn('[DriveAudioEngine] Error resuming drive playback:', err);
+        console.warn('[DriveAudioEngine] Error reanudando audio, recargando pista:', err);
+        const token = googleDriveService.getToken();
+        this.playTrack(this.currentTrack!, token || undefined);
       });
     } else if (this.currentTrack) {
       const token = googleDriveService.getToken();
       this.playTrack(this.currentTrack, token || undefined);
     } else if (this.playlist.length > 0) {
       const token = googleDriveService.getToken();
-      this.playTrack(this.playlist[this.currentIndex || 0], token || undefined);
+      const track = this.currentIndex >= 0 && this.playlist[this.currentIndex] ? this.playlist[this.currentIndex] : this.playlist[0];
+      this.playTrack(track, token || undefined);
     }
   }
 
   public stop() {
     this.cancelCrossfade();
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
+    if (this.forwardBufferAbortController) {
+      this.forwardBufferAbortController.abort();
+      this.forwardBufferAbortController = null;
+    }
     this.stopMediaSessionHeartbeat();
     this.deckA.pause();
     this.deckB.pause();
     this.deckA.src = '';
     this.deckB.src = '';
     driveDownloadManager.purgeAllBlobs();
-    // Keep currentTrack reference so the user can easily play/resume it after switching sources
     this.setStatus('idle');
   }
 

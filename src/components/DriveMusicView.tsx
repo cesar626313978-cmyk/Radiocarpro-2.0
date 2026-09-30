@@ -1219,16 +1219,20 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                           : 'hover:bg-zinc-850/80 text-zinc-200'
                       }`}
                     >
-                      {/* Índice / Indicador de onda acústica */}
+                      {/* Índice / Indicador de onda acústica / Estado de carga */}
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-mono text-xs font-bold transition-all ${
                         isPlaying
                           ? 'bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.4)]'
+                          : isCurrent && playbackStatus === 'buffering'
+                          ? 'bg-amber-500 text-black shadow-[0_0_12px_rgba(245,158,11,0.4)]'
                           : isCurrent && playbackStatus === 'paused'
-                          ? 'bg-amber-500 text-black'
+                          ? 'bg-amber-500/30 text-amber-300'
                           : 'bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 group-hover:bg-zinc-800'
                       }`}>
                         {isPlaying ? (
                           <span className="material-symbols-outlined text-base animate-pulse">volume_up</span>
+                        ) : isCurrent && playbackStatus === 'buffering' ? (
+                          <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
                         ) : isCurrent && playbackStatus === 'paused' ? (
                           <span className="material-symbols-outlined text-base">pause</span>
                         ) : (
@@ -1282,18 +1286,18 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                             e.stopPropagation();
                             handleTrackRowClick(file, idx);
                           }}
-                          title={isPlaying ? t.player.pause : t.player.play}
-                          aria-label={isPlaying ? t.player.pause : t.player.play}
+                          title={isPlaying ? t.player.pause : isCurrent && playbackStatus === 'buffering' ? 'Cargando pista...' : t.player.play}
+                          aria-label={isPlaying ? t.player.pause : isCurrent && playbackStatus === 'buffering' ? 'Cargando pista...' : t.player.play}
                           className={`w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer shrink-0 transition-transform active:scale-95 shadow-md ${
                             isPlaying
                               ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/50 hover:bg-zinc-700'
-                              : isCurrent && playbackStatus === 'loading'
-                              ? 'bg-amber-500 text-black animate-spin'
+                              : isCurrent && playbackStatus === 'buffering'
+                              ? 'bg-amber-500 text-black shadow-[0_0_12px_rgba(245,158,11,0.5)]'
                               : 'bg-emerald-500 hover:bg-emerald-400 text-black'
                           }`}
                         >
-                          <span className="material-symbols-outlined text-xl font-black">
-                            {isPlaying ? 'pause' : isCurrent && playbackStatus === 'loading' ? 'progress_activity' : 'play_arrow'}
+                          <span className={`material-symbols-outlined text-xl font-black ${isCurrent && playbackStatus === 'buffering' ? 'animate-spin' : ''}`}>
+                            {isPlaying ? 'pause' : isCurrent && playbackStatus === 'buffering' ? 'progress_activity' : 'play_arrow'}
                           </span>
                         </button>
                       </div>
@@ -1377,12 +1381,16 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
             <button
               type="button"
               onClick={handleTogglePlay}
-              className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center transition-transform active:scale-95 shadow-[0_0_16px_rgba(16,185,129,0.35)] cursor-pointer"
-              title={playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
-              aria-label={playbackStatus === 'playing' ? 'Pausar' : 'Reproducir'}
+              className={`w-12 h-12 sm:w-13 sm:h-13 rounded-2xl flex items-center justify-center transition-transform active:scale-95 cursor-pointer shadow-md ${
+                playbackStatus === 'buffering'
+                  ? 'bg-amber-500 text-black shadow-[0_0_16px_rgba(245,158,11,0.4)]'
+                  : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_16px_rgba(16,185,129,0.35)]'
+              }`}
+              title={playbackStatus === 'playing' ? 'Pausar' : playbackStatus === 'buffering' ? 'Cargando pista...' : 'Reproducir'}
+              aria-label={playbackStatus === 'playing' ? 'Pausar' : playbackStatus === 'buffering' ? 'Cargando pista...' : 'Reproducir'}
             >
-              <span className="material-symbols-outlined text-2xl font-black">
-                {playbackStatus === 'playing' ? 'pause' : 'play_arrow'}
+              <span className={`material-symbols-outlined text-2xl font-black ${playbackStatus === 'buffering' ? 'animate-spin' : ''}`}>
+                {playbackStatus === 'playing' ? 'pause' : playbackStatus === 'buffering' ? 'progress_activity' : 'play_arrow'}
               </span>
             </button>
 

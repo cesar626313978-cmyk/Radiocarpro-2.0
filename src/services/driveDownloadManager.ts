@@ -12,16 +12,28 @@ export class DriveDownloadManager {
   private preloadedUrl: string | null = null;
   private preloadedFileId: string | null = null;
 
-  // Parámetros de Backoff Exponencial
-  private readonly MAX_RETRIES = 5;
-  private readonly INITIAL_BACKOFF_MS = 1000;
-  private readonly MAX_BACKOFF_MS = 32000;
+  // Parámetros de Backoff Exponencial optimizados para evitar bloqueos
+  private readonly MAX_RETRIES = 2;
+  private readonly INITIAL_BACKOFF_MS = 400;
+  private readonly MAX_BACKOFF_MS = 2500;
 
   /**
-   * Descarga binaria con mitigación estricta de cuotas y retry con jitter
+   * Descarga binaria con mitigación estricta de cuotas, soporte de cancelación AbortSignal y retry rápido
    */
-  public async fetchDriveMediaBinary(fileId: string, accessToken?: string): Promise<Blob> {
-    const effectiveToken = accessToken || getStoredAccessToken(true) || '';
+  public async fetchDriveMediaBinary(fileId: string, accessToken?: string, signal?: AbortSignal): Promise<Blob> {
+    if (signal?.aborted) {
+      const abortErr: any = new Error('[DriveAPI] Descarga cancelada');
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
+
+    let effectiveToken = accessToken || getStoredAccessToken(true) || '';
+
+    if (!effectiveToken) {
+      // Intentar refresco silencioso si no hay token disponible
+      const refreshed = await trySilentTokenRefresh(undefined, true).catch(() => null);
+      effectiveToken = refreshed || getStoredAccessToken(true) || '';
+    }
 
     if (!effectiveToken) {
       const err: any = new Error('[DriveAPI] No hay token de autenticación disponible para descargar el archivo.');
@@ -32,13 +44,20 @@ export class DriveDownloadManager {
     const endpoint = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&acknowledgeAbuse=true`;
     let attempt = 0;
 
-    while (attempt < this.MAX_RETRIES) {
+    while (attempt <= this.MAX_RETRIES) {
+      if (signal?.aborted) {
+        const abortErr: any = new Error('[DriveAPI] Descarga cancelada');
+        abortErr.name = 'AbortError';
+        throw abortErr;
+      }
+
       try {
         const response = await fetch(endpoint, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${effectiveToken}`,
           },
+          signal,
         });
 
         if (response.ok) {
@@ -46,16 +65,21 @@ export class DriveDownloadManager {
         }
 
         if (response.status === 401) {
-          console.warn('[DriveAPI] Token 401 detectado, limpiando token inválido...');
+          console.warn('[DriveAPI] Token 401 detectado, intentando refresco silencioso...');
           clearStoredAccessToken();
-          const refreshedToken = await syncTokenFromCloud();
+          let refreshedToken = await syncTokenFromCloud().catch(() => null);
+          if (!refreshedToken) {
+            refreshedToken = await trySilentTokenRefresh(undefined, true).catch(() => null);
+          }
           if (refreshedToken) {
-            console.log('[DriveAPI] Token renovado desde la nube tras 401, reintentando descarga...');
+            effectiveToken = refreshedToken;
+            console.log('[DriveAPI] Token renovado tras 401, reintentando descarga...');
             const retryRes = await fetch(endpoint, {
               method: 'GET',
               headers: {
                 Authorization: `Bearer ${refreshedToken}`,
               },
+              signal,
             });
             if (retryRes.ok) {
               return await retryRes.blob();
@@ -72,14 +96,13 @@ export class DriveDownloadManager {
             audioCarTelemetry.recordNetworkThrottling();
           }
           attempt++;
-          if (attempt >= this.MAX_RETRIES) {
-            throw new Error(`[DriveDownloadManager] Cuota excedida (HTTP ${response.status}). Reintentos agotados.`);
+          if (attempt > this.MAX_RETRIES) {
+            throw new Error(`[DriveDownloadManager] Cuota excedida (HTTP ${response.status}).`);
           }
           const backoff = Math.min(
             this.MAX_BACKOFF_MS,
             this.INITIAL_BACKOFF_MS * Math.pow(2, attempt)
           );
-          // Jitter aleatorio uniforme ± 20%
           const jitter = backoff * (0.8 + Math.random() * 0.4);
           console.warn(`[DriveAPI] HTTP ${response.status}. Reintento ${attempt}/${this.MAX_RETRIES} en ${Math.round(jitter)}ms`);
           await new Promise((resolve) => setTimeout(resolve, jitter));
@@ -88,14 +111,15 @@ export class DriveDownloadManager {
 
         throw new Error(`[DriveAPI] Error HTTP fatal: ${response.status} ${response.statusText}`);
       } catch (err: any) {
+        if (signal?.aborted || err?.name === 'AbortError') throw err;
         if (err?.code === 'TOKEN_EXPIRED') throw err;
-        if (attempt >= this.MAX_RETRIES - 1) throw err;
+        if (attempt >= this.MAX_RETRIES) throw err;
         attempt++;
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 600));
       }
     }
 
-    throw new Error('[DriveDownloadManager] No se pudo obtener el archivo tras múltiples intentos.');
+    throw new Error('[DriveDownloadManager] No se pudo obtener el archivo tras reintentos.');
   }
 
   /**
