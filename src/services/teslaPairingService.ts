@@ -11,8 +11,10 @@ export interface TeslaPairingData {
   userPhoto?: string;
   favorites?: string[];
   favoriteStationObjects?: any[];
+  deletedFavorites?: string[];
   createdAt: string;
   pairedAt?: string;
+  updatedAt?: string;
 }
 
 export class TeslaPairingService {
@@ -83,6 +85,7 @@ export class TeslaPairingService {
       photoURL?: string;
       favorites?: string[];
       favoriteStationObjects?: any[];
+      deletedFavorites?: string[];
     }
   ): Promise<void> {
     const docRef = doc(db, 'tesla_pairings', code);
@@ -95,7 +98,9 @@ export class TeslaPairingService {
       userPhoto: userInfo.photoURL || '',
       favorites: userInfo.favorites || [],
       favoriteStationObjects: userInfo.favoriteStationObjects || [],
+      deletedFavorites: userInfo.deletedFavorites || [],
       pairedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -107,6 +112,7 @@ export class TeslaPairingService {
     data: {
       favorites?: string[];
       favoriteStationObjects?: any[];
+      deletedFavorites?: string[];
       settings?: any;
       stationPlaytimes?: any;
       driveToken?: string;
@@ -117,26 +123,21 @@ export class TeslaPairingService {
     const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);
     const docRef = doc(db, 'tesla_pairings', cleanKey);
 
-    // Safeguard: Never accidentally wipe existing cloud favorites with an empty array
-    if (!data.favorites || data.favorites.length === 0) {
-      try {
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          const current = snap.data();
-          if (Array.isArray(current?.favorites) && current.favorites.length > 0) {
-            console.warn('[TeslaPairingService] Preservando favoritas existentes en la nube frente a sobreescritura vacía.');
-            const { favorites: _f, favoriteStationObjects: _fo, ...rest } = data;
-            await setDoc(docRef, { ...rest, updatedAt: new Date().toISOString() }, { merge: true });
-            return;
-          }
-        }
-      } catch {}
-    }
-
-    await setDoc(docRef, {
+    const payload: Record<string, any> = {
       ...data,
       updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    };
+
+    // If favorites is explicitly provided (even if empty []), ensure it's saved without reviving deleted stations
+    if (data.favorites !== undefined) {
+      payload.favorites = data.favorites;
+      payload.favoriteStationObjects = data.favoriteStationObjects || [];
+    }
+    if (data.deletedFavorites !== undefined) {
+      payload.deletedFavorites = data.deletedFavorites;
+    }
+
+    await setDoc(docRef, payload, { merge: true });
   }
 
   /**
@@ -145,10 +146,12 @@ export class TeslaPairingService {
   public async getPairedPreferences(syncKey: string): Promise<{
     favorites?: string[];
     favoriteStationObjects?: any[];
+    deletedFavorites?: string[];
     settings?: any;
     stationPlaytimes?: any;
     driveToken?: string;
     driveTokenExpiresAt?: number;
+    updatedAt?: string;
   } | null> {
     if (!syncKey) return null;
     const cleanKey = ('sync_' + syncKey.replace(/[^a-zA-Z0-9_-]/g, '_')).slice(0, 120);
@@ -172,9 +175,11 @@ export class TeslaPairingService {
     onUpdate: (data: {
       favorites?: string[];
       favoriteStationObjects?: any[];
+      deletedFavorites?: string[];
       settings?: any;
       driveToken?: string;
       driveTokenExpiresAt?: number;
+      updatedAt?: string;
     }) => void
   ): () => void {
     if (!syncKey) return () => {};

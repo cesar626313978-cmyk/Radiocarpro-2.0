@@ -29,6 +29,10 @@
           "type": "array",
           "description": "Array of full RadioStation objects"
         },
+        "deletedFavorites": {
+          "type": "array",
+          "description": "Array of radio station IDs explicitly removed by user to prevent resurrection across devices"
+        },
         "recentStations": {
           "type": "array",
           "description": "Array of recently listened station IDs"

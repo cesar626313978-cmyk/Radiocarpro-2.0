@@ -8,7 +8,7 @@ import { useTranslation } from '../i18n/LanguageContext';
 interface TeslaPairingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (pairedUser: any, favorites?: string[], favoriteStationObjects?: any[]) => void;
+  onSuccess: (pairedUser: any, favorites?: string[], favoriteStationObjects?: any[], deletedFavorites?: string[]) => void;
   userEmail?: string;
 }
 
@@ -77,7 +77,7 @@ export const TeslaPairingModal: React.FC<TeslaPairingModalProps> = ({
               } catch {}
 
               setTimeout(() => {
-                onSuccess(pairedUserData, data.favorites, data.favoriteStationObjects);
+                onSuccess(pairedUserData, data.favorites, data.favoriteStationObjects, data.deletedFavorites);
                 onClose();
               }, 1200);
             }

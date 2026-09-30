@@ -50,10 +50,16 @@ export const MobilePairingView: React.FC<MobilePairingViewProps> = ({ pairCode, 
       const syncKey = result.user.email || result.user.uid;
       let favs: string[] = userPrefs?.favorites || [];
       let favObjs: any[] = userPrefs?.favoriteStationObjects || [];
+      let delFavs: string[] = userPrefs?.deletedFavorites || [];
 
-      // If Firestore favorites were empty, check mobile phone local storage
-      if (favs.length === 0) {
+      // If user had NO Firestore profile at all (brand new account), check mobile phone local storage
+      if (!userPrefs) {
         try {
+          const localDelRaw = localStorage.getItem(`radiostream_deleted_favs_${result.user.uid}`);
+          if (localDelRaw) {
+            const parsedDel = JSON.parse(localDelRaw);
+            if (Array.isArray(parsedDel)) delFavs = parsedDel;
+          }
           const localFavsRaw = localStorage.getItem(`radiostream_favs_${result.user.uid}`) || localStorage.getItem('radiostream_favs');
           if (localFavsRaw) {
             const parsed = JSON.parse(localFavsRaw);
@@ -65,23 +71,33 @@ export const MobilePairingView: React.FC<MobilePairingViewProps> = ({ pairCode, 
             if (parsedObjs && typeof parsedObjs === 'object') favObjs = Object.values(parsedObjs);
           }
         } catch {}
+
+        // If still empty, check existing paired cloud session
+        if (favs.length === 0) {
+          try {
+            const existingPaired = await teslaPairingService.getPairedPreferences(syncKey);
+            if (existingPaired?.favorites && existingPaired.favorites.length > 0) {
+              favs = existingPaired.favorites;
+              favObjs = existingPaired.favoriteStationObjects || [];
+              if (existingPaired.deletedFavorites) {
+                delFavs = Array.from(new Set([...delFavs, ...existingPaired.deletedFavorites]));
+              }
+            }
+          } catch {}
+        }
       }
 
-      // If still empty, check existing paired cloud session
-      if (favs.length === 0) {
-        try {
-          const existingPaired = await teslaPairingService.getPairedPreferences(syncKey);
-          if (existingPaired?.favorites && existingPaired.favorites.length > 0) {
-            favs = existingPaired.favorites;
-            favObjs = existingPaired.favoriteStationObjects || [];
-          }
-        } catch {}
+      // Filter out any explicitly deleted favorites
+      if (delFavs.length > 0) {
+        favs = favs.filter(id => !delFavs.includes(id));
+        favObjs = favObjs.filter(st => st && st.id && !delFavs.includes(st.id));
       }
 
       try {
         await teslaPairingService.savePairedPreferences(syncKey, {
           favorites: favs,
           favoriteStationObjects: favObjs,
+          deletedFavorites: delFavs,
           settings: userPrefs?.settings,
           stationPlaytimes: userPrefs?.stationPlaytimes,
           driveToken: token,
@@ -98,6 +114,7 @@ export const MobilePairingView: React.FC<MobilePairingViewProps> = ({ pairCode, 
         photoURL: result.user.photoURL || undefined,
         favorites: favs,
         favoriteStationObjects: favObjs,
+        deletedFavorites: delFavs,
       });
 
       setIsSuccess(true);

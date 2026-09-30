@@ -217,6 +217,7 @@ let pendingSave: {
   data: {
     favorites: string[];
     favoriteStationObjects?: RadioStation[];
+    deletedFavorites?: string[];
     alarms: Alarm[];
     totalMinutesListened?: number;
     settings?: Record<string, unknown>;
@@ -229,6 +230,7 @@ async function executeFirestoreSave(
   data: {
     favorites: string[];
     favoriteStationObjects?: RadioStation[];
+    deletedFavorites?: string[];
     alarms: Alarm[];
     totalMinutesListened?: number;
     settings?: Record<string, unknown>;
@@ -249,6 +251,9 @@ async function executeFirestoreSave(
       alarms: data.alarms || [],
       updatedAt: new Date().toISOString(),
     };
+    if (data.deletedFavorites !== undefined) {
+      payload.deletedFavorites = data.deletedFavorites;
+    }
     if (data.settings) {
       payload.settings = data.settings;
     }
@@ -256,7 +261,7 @@ async function executeFirestoreSave(
       payload.stationPlaytimes = data.stationPlaytimes;
     }
     await setDoc(userRef, payload, { merge: true });
-    console.log(`[Firestore] Sincronización guardada exitosamente (${data.favorites.length} favoritas, settings: ${data.settings ? 'sí' : 'no'}) para UID: ${userId}`);
+    console.log(`[Firestore] Sincronización guardada exitosamente (${data.favorites.length} favoritas, deleted: ${data.deletedFavorites?.length || 0}) para UID: ${userId}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -311,6 +316,7 @@ export async function saveUserPreferencesToFirestore(
   data: {
     favorites: string[];
     favoriteStationObjects?: RadioStation[];
+    deletedFavorites?: string[];
     alarms: Alarm[];
     totalMinutesListened?: number;
     settings?: Record<string, unknown>;
@@ -354,6 +360,7 @@ export async function saveUserPreferencesToFirestore(
 export async function loadUserPreferencesFromFirestore(userId: string): Promise<{
   favorites?: string[];
   favoriteStationObjects?: RadioStation[];
+  deletedFavorites?: string[];
   alarms?: Alarm[];
   updatedAt?: string;
   [key: string]: any;
