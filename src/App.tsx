@@ -26,6 +26,7 @@ import { googleDriveService } from './services/googleDriveService';
 import { teslaPairingService } from './services/teslaPairingService';
 import { teslaBackgroundService } from './services/teslaBackgroundService';
 import { startTokenHeartbeat } from './services/googleDriveAuth';
+import { LandingPage } from './components/LandingPage';
 import {
   auth,
   signInWithGoogle,
@@ -54,7 +55,12 @@ const getDeletedFavsStorageKey = (userId?: string | null) =>
   userId ? `radiostream_deleted_favs_${userId}` : 'radiostream_deleted_favs_guest';
 
 export default function App() {
+  const [isLandingPage] = useState(window.location.pathname === '/info');
   const [stations, setStations] = useState<RadioStation[]>(INITIAL_STATIONS);
+  
+  if (isLandingPage) {
+    return <LandingPage />;
+  }
   const [currentStation, setCurrentStation] = useState<RadioStation>(INITIAL_STATIONS[0]);
   const currentStationRef = useRef<RadioStation>(INITIAL_STATIONS[0]);
   useEffect(() => {

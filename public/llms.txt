@@ -1,0 +1,7 @@
+# AudioCar Pro
+
+> AudioCar Pro es un reproductor web de audio y radio streaming optimizado para navegadores de vehículos (Tesla, BYD) y navegadores web modernos, eliminando la necesidad de almacenamiento físico.
+
+## Casos de Uso
+- [Música Google Drive en Tesla](https://audi-car.es/info): Reproducción directa sin puerto USB.
+- [Radio Online](https://audi-car.es/info): Streaming sin cortes por pérdida de señal FM.

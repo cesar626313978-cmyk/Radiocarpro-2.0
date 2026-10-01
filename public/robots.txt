@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Motores de IA de búsqueda generativa
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: Claude-SearchBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
