@@ -1319,17 +1319,14 @@ export default function App() {
     localStorage.getItem('radiostream_paired_user')
   );
 
-  if (isLandingPage || !isAllowedAccess) {
+  if (isLandingPage) {
     return (
       <LandingPage
-        requireAccessPrompt={!isAllowedAccess && !isLandingPage}
         onAccessGranted={() => {
           const updated = getStoredAccessInfo();
           setAccessInfo(updated);
-          if (!isLandingPage) {
-            setIsLandingPage(false);
-            window.history.replaceState(null, '', '/');
-          }
+          setIsLandingPage(false);
+          window.history.replaceState(null, '', '/');
         }}
       />
     );
@@ -1337,6 +1334,26 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#131313] text-[#e5e2e1] flex flex-col font-['Inter'] relative selection:bg-[#8B5CF6] selection:text-white">
+      {/* Exploration Banner for non-registered users */}
+      {!isAllowedAccess && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-black px-4 py-2 font-bold text-xs sm:text-sm flex items-center justify-between gap-3 shadow-md z-50">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-base">visibility</span>
+            <span>
+              <strong>Modo Exploración:</strong> Estás probando AudioCar Pro. Para desbloquear acceso ilimitado y guardar favoritos, ¡activa tu acceso gratis!
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              window.history.pushState(null, '', '/info');
+              setIsLandingPage(true);
+            }}
+            className="px-3 py-1 bg-black text-white rounded-lg text-xs hover:bg-gray-900 transition-all whitespace-nowrap shadow cursor-pointer"
+          >
+            Ir al Landing 🌐
+          </button>
+        </div>
+      )}
       {/* Dynamic Interactive Biome Canvas (Space, Ocean, Lunar, Canyon, Savanna, Jungle) */}
       <DynamicBackground activeTheme={activeTheme} />
       {/* Realistic Space Cosmos with space stations, comets, rockets when in space theme */}

@@ -30,8 +30,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   );
 
   // Admin section state (for César)
+  const [isAdminUser, setIsAdminUser] = useState<boolean>(() => {
+    return (
+      window.location.search.includes('admin') ||
+      auth.currentUser?.email?.toLowerCase() === ADMIN_EMAIL ||
+      localStorage.getItem('audiocar_access_email')?.toLowerCase() === ADMIN_EMAIL
+    );
+  });
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(() => {
-    return window.location.search.includes('admin') || auth.currentUser?.email === ADMIN_EMAIL;
+    return window.location.search.includes('admin') || auth.currentUser?.email?.toLowerCase() === ADMIN_EMAIL;
   });
   const [subscribersList, setSubscribersList] = useState<Subscriber[]>([]);
   const [isLoadingSubscribers, setIsLoadingSubscribers] = useState<boolean>(false);
@@ -51,13 +58,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     const unsub = auth.onAuthStateChanged(currentUser => {
       if (currentUser?.email) {
         const cleanEmail = currentUser.email.toLowerCase();
+        if (cleanEmail === ADMIN_EMAIL) {
+          setIsAdminUser(true);
+        }
         if (isGmailAddress(cleanEmail)) {
           registerSubscriber(cleanEmail, currentUser.displayName || undefined, 'google_auth_direct').then(() => {
             setAccessState({ hasAccess: true, email: cleanEmail });
           });
-        }
-        if (cleanEmail === ADMIN_EMAIL) {
-          setIsAdminOpen(true);
         }
       }
     });
@@ -200,8 +207,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* Top Header Bar */}
       <header className="max-w-5xl mx-auto flex justify-between items-center mb-10 pb-4 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-xl shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-            A
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-black/60 border border-white/20 overflow-hidden p-1 shadow-[0_0_20px_rgba(6,182,212,0.4)] flex items-center justify-center">
+            <img src="/logo.svg" alt="AudioCar Pro Logo" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-black bg-gradient-to-r from-cyan-400 via-blue-400 to-emerald-400 bg-clip-text text-transparent">
@@ -610,116 +617,118 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
 
         {/* Panel de Control para César (Exportar a Google Sheets) */}
-        <section className="mb-16 p-6 rounded-3xl bg-black/40 border border-white/10 text-left">
-          <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsAdminOpen(!isAdminOpen)}>
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-amber-400">admin_panel_settings</span>
-              <h4 className="font-bold text-white text-sm">
-                Control de Usuarios Registrados (Google Sheets)
-              </h4>
-            </div>
-            <button
-              type="button"
-              className="text-xs text-gray-400 hover:text-white font-mono"
-            >
-              {isAdminOpen ? '▲ Ocultar' : '▼ Ver Panel'}
-            </button>
-          </div>
-
-          {isAdminOpen && (
-            <div className="mt-6 pt-6 border-t border-white/10 space-y-6 animate-fade-in">
-              <div className="flex flex-wrap items-center justify-between gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
-                <div>
-                  <p className="text-xs text-gray-400">Total de usuarios con acceso:</p>
-                  <p className="text-2xl font-black text-cyan-400">{subscribersList.length || '—'}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleLoadSubscribers}
-                    disabled={isLoadingSubscribers}
-                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-sm">sync</span>
-                    <span>{isLoadingSubscribers ? 'Cargando...' : 'Actualizar'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (subscribersList.length === 0) {
-                        getAllSubscribers().then(list => exportSubscribersToCSV(list));
-                      } else {
-                        exportSubscribersToCSV(subscribersList);
-                      }
-                    }}
-                    className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-600 text-black font-black rounded-xl text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-sm">download</span>
-                    <span>📥 Exportar a Google Sheets (CSV)</span>
-                  </button>
-                </div>
+        {isAdminUser && (
+          <section className="mb-16 p-6 rounded-3xl bg-black/40 border border-white/10 text-left">
+            <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsAdminOpen(!isAdminOpen)}>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-400">admin_panel_settings</span>
+                <h4 className="font-bold text-white text-sm">
+                  Control de Usuarios Registrados (Google Sheets)
+                </h4>
               </div>
-
-              {/* Live Webhook config for direct Google Sheet Sync */}
-              <form onSubmit={handleSaveWebhook} className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-gray-300">
-                    Sincronización en tiempo real con Google Sheet (Opcional):
-                  </label>
-                  {webhookSavedMsg && (
-                    <span className="text-xs text-emerald-400 font-bold">{webhookSavedMsg}</span>
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-400">
-                  Si deseas que cada nuevo usuario registrado se añada de forma automática como una nueva fila en tu Google Sheet sin tener que descargar el CSV, puedes pegar aquí la URL de tu Webhook de Google Apps Script.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={sheetsWebhookUrl}
-                    onChange={e => setSheetsWebhookUrl(e.target.value)}
-                    placeholder="https://script.google.com/macros/s/..."
-                    className="flex-1 px-3 py-2 bg-black/60 border border-white/20 rounded-lg text-xs font-mono text-white placeholder-gray-600 focus:outline-none focus:border-cyan-400"
-                  />
-                  <button
-                    type="submit"
-                    className="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-black font-bold rounded-lg text-xs"
-                  >
-                    Guardar
-                  </button>
-                </div>
-              </form>
-
-              {/* Mini table of subscribers */}
-              {subscribersList.length > 0 && (
-                <div className="max-h-60 overflow-y-auto rounded-xl border border-white/10">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead className="bg-white/10 text-gray-300 sticky top-0">
-                      <tr>
-                        <th className="p-2.5">Email</th>
-                        <th className="p-2.5">Nombre</th>
-                        <th className="p-2.5">Fecha</th>
-                        <th className="p-2.5">Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5 text-gray-300">
-                      {subscribersList.map((sub, idx) => (
-                        <tr key={idx} className="hover:bg-white/5">
-                          <td className="p-2.5 text-cyan-300">{sub.email}</td>
-                          <td className="p-2.5">{sub.displayName || '—'}</td>
-                          <td className="p-2.5 text-gray-400">{new Date(sub.registeredAt).toLocaleDateString('es-ES')}</td>
-                          <td className="p-2.5 text-emerald-400">✓ Activo</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <button
+                type="button"
+                className="text-xs text-gray-400 hover:text-white font-mono"
+              >
+                {isAdminOpen ? '▲ Ocultar' : '▼ Ver Panel'}
+              </button>
             </div>
-          )}
-        </section>
+
+            {isAdminOpen && (
+              <div className="mt-6 pt-6 border-t border-white/10 space-y-6 animate-fade-in">
+                <div className="flex flex-wrap items-center justify-between gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
+                  <div>
+                    <p className="text-xs text-gray-400">Total de usuarios con acceso:</p>
+                    <p className="text-2xl font-black text-cyan-400">{subscribersList.length || '—'}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleLoadSubscribers}
+                      disabled={isLoadingSubscribers}
+                      className="px-3.5 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">sync</span>
+                      <span>{isLoadingSubscribers ? 'Cargando...' : 'Actualizar'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (subscribersList.length === 0) {
+                          getAllSubscribers().then(list => exportSubscribersToCSV(list));
+                        } else {
+                          exportSubscribersToCSV(subscribersList);
+                        }
+                      }}
+                      className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-600 text-black font-black rounded-xl text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">download</span>
+                      <span>📥 Exportar a Google Sheets (CSV)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Webhook config for direct Google Sheet Sync */}
+                <form onSubmit={handleSaveWebhook} className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-300">
+                      Sincronización en tiempo real con Google Sheet (Opcional):
+                    </label>
+                    {webhookSavedMsg && (
+                      <span className="text-xs text-emerald-400 font-bold">{webhookSavedMsg}</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Si deseas que cada nuevo usuario registrado se añada de forma automática como una nueva fila en tu Google Sheet sin tener que descargar el CSV, puedes pegar aquí la URL de tu Webhook de Google Apps Script.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={sheetsWebhookUrl}
+                      onChange={e => setSheetsWebhookUrl(e.target.value)}
+                      placeholder="https://script.google.com/macros/s/..."
+                      className="flex-1 px-3 py-2 bg-black/60 border border-white/20 rounded-lg text-xs font-mono text-white placeholder-gray-600 focus:outline-none focus:border-cyan-400"
+                    />
+                    <button
+                      type="submit"
+                      className="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-black font-bold rounded-lg text-xs"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </form>
+
+                {/* Mini table of subscribers */}
+                {subscribersList.length > 0 && (
+                  <div className="max-h-60 overflow-y-auto rounded-xl border border-white/10">
+                    <table className="w-full text-left text-xs font-mono">
+                      <thead className="bg-white/10 text-gray-300 sticky top-0">
+                        <tr>
+                          <th className="p-2.5">Email</th>
+                          <th className="p-2.5">Nombre</th>
+                          <th className="p-2.5">Fecha</th>
+                          <th className="p-2.5">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-gray-300">
+                        {subscribersList.map((sub, idx) => (
+                          <tr key={idx} className="hover:bg-white/5">
+                            <td className="p-2.5 text-cyan-300">{sub.email}</td>
+                            <td className="p-2.5">{sub.displayName || '—'}</td>
+                            <td className="p-2.5 text-gray-400">{new Date(sub.registeredAt).toLocaleDateString('es-ES')}</td>
+                            <td className="p-2.5 text-emerald-400">✓ Activo</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Footer */}
         <footer className="pt-8 border-t border-white/10 text-center text-xs text-gray-500 space-y-2">
