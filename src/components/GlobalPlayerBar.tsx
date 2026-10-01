@@ -21,6 +21,7 @@ interface GlobalPlayerBarProps {
   onVolumeChange: (vol: number) => void;
   isFavorite: boolean;
   onToggleFavorite: (id: string, station?: RadioStation) => void;
+  isTuning: boolean;
 }
 
 export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
@@ -40,6 +41,7 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
   onVolumeChange,
   isFavorite,
   onToggleFavorite,
+  isTuning,
 }) => {
   const { t } = useTranslation();
   const isDrive = activeSource === 'drive';
@@ -56,23 +58,27 @@ export const GlobalPlayerBar: React.FC<GlobalPlayerBarProps> = ({
           style={{ backgroundColor: isDrive ? '#8B5CF6' : (currentStation?.color || '#201f1f') }}
         >
           <span className="material-symbols-outlined text-white text-lg sm:text-2xl">
-            {isDrive ? 'cloud_queue' : 'radio'}
+            {isTuning ? 'sensors' : (isDrive ? 'cloud_queue' : 'radio')}
           </span>
-          {((isDrive ? drivePlaybackStatus === 'playing' : playbackStatus === 'playing')) && (
+          {isTuning && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                <span className="material-symbols-outlined text-emerald-400 animate-spin text-sm">sync</span>
+            </div>
+          )}
+          {((isDrive ? drivePlaybackStatus === 'playing' : playbackStatus === 'playing')) && !isTuning && (
             <div className="absolute top-1 right-1 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#10B981] animate-pulse border border-black" />
           )}
           {((isDrive ? drivePlaybackStatus === 'buffering' : playbackStatus === 'buffering')) && (
             <div className="absolute top-1 right-1 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#F59E0B] animate-ping border border-black" />
-          )}
-          {((isDrive ? drivePlaybackStatus === 'error' : playbackStatus === 'error')) && (
-            <div className="absolute top-1 right-1 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#EF4444] border border-black" />
           )}
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col justify-center">
           <div className="flex items-center gap-1.5 sm:gap-2">
             <h4 className="font-bold text-xs sm:text-sm md:text-base text-white truncate">
-              {isDrive ? (currentDriveTrack?.name || t.player.googleDriveMusic) : currentStation?.name}
+              {isTuning 
+                ? <span className="text-emerald-400">SINTONIZANDO...</span> 
+                : (isDrive ? (currentDriveTrack?.name || t.player.googleDriveMusic) : currentStation?.name)}
             </h4>
             {!isDrive && currentStation && (
               <button

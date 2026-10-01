@@ -73,9 +73,6 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
   // Search filter query in Library view
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Local weather & time
-  const [localTime, setLocalTime] = useState<string>('');
-
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
@@ -271,13 +268,30 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Clock update for "Tiempo Local"
+  // Clock update for "Tiempo Local" and analog hands
+  const [localTime, setLocalTime] = useState<string>('');
+  const [hourAngle, setHourAngle] = useState(0);
+  const [minuteAngle, setMinuteAngle] = useState(0);
+  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(0);
+
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const hours = now.getHours().toString().padStart(2, '0');
-      const minutes = now.getMinutes().toString().padStart(2, '0');
-      setLocalTime(`${hours}:${minutes}`);
+      const h = now.getHours();
+      const m = now.getMinutes();
+      setHours(h);
+      setMinutes(m);
+      
+      const mAngle = (m / 60) * 360;
+      const hAngle = (((h % 12) + m / 60) / 12) * 360;
+      
+      setMinuteAngle(mAngle);
+      setHourAngle(hAngle);
+      
+      const hoursStr = h.toString().padStart(2, '0');
+      const minutesStr = m.toString().padStart(2, '0');
+      setLocalTime(`${hoursStr}:${minutesStr}`);
     };
     updateTime();
     const timer = setInterval(updateTime, 10000);
@@ -703,6 +717,35 @@ export const CarModeView: React.FC<CarModeViewProps> = ({
               fill={currentView === 'library' ? '#4edea3' : '#38bdf8'}
               className="drop-shadow-[0_0_6px_#38bdf8]"
             />
+
+            {/* ANALOG CLOCK HANDS */}
+            {/* Hour hand */}
+            <circle 
+              cx={100 + 95.5 * Math.cos((hourAngle - 90) * Math.PI / 180)} 
+              cy={100 + 95.5 * Math.sin((hourAngle - 90) * Math.PI / 180)} 
+              r="5" fill="#030712" stroke="#38bdf8" strokeWidth="1.5" 
+            />
+            <text 
+              x={100 + 95.5 * Math.cos((hourAngle - 90) * Math.PI / 180)} 
+              y={100 + 95.5 * Math.sin((hourAngle - 90) * Math.PI / 180) + 1} 
+              textAnchor="middle" fill="#ffffff" fontSize="4" fontWeight="bold" dominantBaseline="middle"
+            >
+              {hours % 12 || 12}
+            </text>
+
+            {/* Minute hand */}
+            <circle 
+              cx={100 + 95.5 * Math.cos((minuteAngle - 90) * Math.PI / 180)} 
+              cy={100 + 95.5 * Math.sin((minuteAngle - 90) * Math.PI / 180)} 
+              r="3.75" fill="#030712" stroke="#4edea3" strokeWidth="1.5" 
+            />
+            <text 
+              x={100 + 95.5 * Math.cos((minuteAngle - 90) * Math.PI / 180)} 
+              y={100 + 95.5 * Math.sin((minuteAngle - 90) * Math.PI / 180) + 0.8} 
+              textAnchor="middle" fill="#ffffff" fontSize="3" fontWeight="bold" dominantBaseline="middle"
+            >
+              {minutes}
+            </text>
 
             {/* ACTIVE ILLUMINATED PROGRESSION RING (STARTS AT 12:00, ROTATES -90 DEG, ADVANCES CLOCKWISE) */}
             {activeSource === 'drive' || !isPlaying ? (

@@ -9,7 +9,6 @@ import { GlobalPlayerBar } from './components/GlobalPlayerBar';
 import { DiscoverView } from './components/DiscoverView';
 import { FavoritesView } from './components/FavoritesView';
 import { DriveMusicView } from './components/DriveMusicView';
-import { TuningModal } from './components/TuningModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ShaderBackground } from './components/ShaderBackground';
 import { RealisticSpaceCosmos } from './components/RealisticSpaceCosmos';
@@ -1007,7 +1006,7 @@ export default function App() {
   };
 
   // Tune to station
-  const handleTuneToStation = (station: RadioStation, showTuningOverlay = true) => {
+  const handleTuneToStation = (station: RadioStation) => {
     if (tuningTimeoutRef.current) {
       clearTimeout(tuningTimeoutRef.current);
     }
@@ -1029,14 +1028,12 @@ export default function App() {
     setPlaybackError('');
     setCurrentStation(station);
 
-    if (showTuningOverlay) {
-      setTuningStation(station);
-      setIsTuning(true);
-      tuningTimeoutRef.current = window.setTimeout(() => {
-        setIsTuning(false);
-        setTuningStation(null);
-      }, 700);
-    }
+    setTuningStation(station);
+    setIsTuning(true);
+    tuningTimeoutRef.current = window.setTimeout(() => {
+      setIsTuning(false);
+      setTuningStation(null);
+    }, 2000); // 2s sintonizando
 
     driveAudioEngine.stopAndDisconnect();
     setActiveSource('radio');
@@ -1093,7 +1090,7 @@ export default function App() {
       setIsPlaying(false);
     } else {
       if (currentStation) {
-        handleTuneToStation(currentStation, false);
+        handleTuneToStation(currentStation);
       }
     }
   };
@@ -1459,19 +1456,13 @@ export default function App() {
         }}
         isFavorite={favoriteStationObjects.some(s => s.id === currentStation.id)}
         onToggleFavorite={handleToggleFavorite}
+        isTuning={isTuning}
       />
 
       {/* Mobile Bottom Navigation Bar */}
       <BottomNavBar
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
-      />
-
-      {/* Tuning Modal */}
-      <TuningModal
-        isOpen={isTuning}
-        station={tuningStation}
-        onCancel={handleCancelTuning}
       />
 
       {/* Tesla Mobile QR Pairing Modal */}

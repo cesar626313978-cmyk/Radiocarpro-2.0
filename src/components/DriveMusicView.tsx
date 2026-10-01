@@ -982,7 +982,7 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
 
       {/* 2. MASTER-DETAIL AUTOMOTRIZ (PANTALLA APAISADA / TESLA UI / CARPLAY) */}
       {(isAuthenticated || displayedTracks.length > 0 || allRecursiveFiles.length > 0 || files.length > 0) && (
-        <div className="w-full flex-1 flex flex-col md:flex-row min-h-[560px] max-h-[calc(100vh-220px)] h-[620px] overflow-hidden">
+        <div className="w-full flex-1 flex flex-col md:flex-row min-h-0 h-full overflow-hidden">
           {/* Master Column: COLECCIONES (Carpetas) */}
           <aside className={`${mobileTab === 'collections' ? 'flex' : 'hidden md:flex'} w-full md:w-80 lg:w-96 flex-col border-r border-zinc-800/80 bg-zinc-950/70 shrink-0 overflow-hidden`}>
             {/* Header de Colecciones */}

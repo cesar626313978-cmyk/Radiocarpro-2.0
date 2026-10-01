@@ -50,7 +50,7 @@ export const SideNav: React.FC<SideNavProps> = ({
             <button
               key={item.id}
               onClick={() => onSelectTab(item.id)}
-              className={`flex items-center justify-between p-3 xl:p-3.5 border-3 border-black font-mono-tech text-xs xl:text-sm font-bold text-left uppercase transition-all duration-100 w-full cursor-pointer ${
+              className={`flex items-center justify-between p-3 xl:p-3.5 border-3 border-black font-mono-tech text-xs xl:text-sm font-bold text-left uppercase transition-all duration-100 w-full cursor-pointer active:scale-95 ${
                 isActive
                   ? 'bg-[#4edea3] text-[#003824] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] translate-x-1'
                   : 'bg-[#201f1f] text-[#e5e2e1] hover:bg-[#353534] hover:translate-x-0.5'
