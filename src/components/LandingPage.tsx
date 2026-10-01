@@ -54,7 +54,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         if (isGmailAddress(cleanEmail)) {
           registerSubscriber(cleanEmail, currentUser.displayName || undefined, 'google_auth_direct').then(() => {
             setAccessState({ hasAccess: true, email: cleanEmail });
-            if (onAccessGranted) onAccessGranted();
           });
         }
         if (cleanEmail === ADMIN_EMAIL) {
@@ -63,7 +62,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       }
     });
     return unsub;
-  }, [onAccessGranted]);
+  }, []);
 
   // Handle Google Verification and Registration
   const handleVerifyWithGoogle = async (e?: React.FormEvent) => {
@@ -96,10 +95,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         setAccessState({ hasAccess: true, email: verifiedEmail });
         setAccessEmail('');
 
-        if (onAccessGranted) {
+        // If user was prompted because they tried to enter the app directly without access:
+        if (requireAccessPrompt && onAccessGranted) {
           setTimeout(() => {
             onAccessGranted();
-          }, 800);
+          }, 1000);
         }
       }
     } catch (err: any) {
@@ -420,33 +420,66 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { title: 'Modo Coche HUD Central', desc: 'Esfera espacial, reloj analógico y controles táctiles XXL', tag: 'Modo Conducción' },
-              { title: 'Librería Google Drive', desc: 'Carpetas sincronizadas /mimusica y buscador de pistas', tag: 'Música en la Nube' },
-              { title: 'Buscador de Emisoras en Vivo', desc: 'Emisoras nacionales y locales ordenadas por ciudad y género', tag: 'Radio Digital' },
-              { title: 'Gestión de Favoritas', desc: 'Acceso directo con un solo toque sin distraer la vista', tag: 'Favoritas' },
-              { title: 'Transición Fluida', desc: 'Conmutación instantánea entre pantalla completa y modo HUD', tag: 'Rendimiento' },
-              { title: 'Listas de Reproducción por Carpeta', desc: 'Organización limpia sin etiquetas complejas ni cables USB', tag: 'Simplicidad' },
+              { img: '/images/tesla1.jpg', title: 'Modo Coche HUD Central', desc: 'Esfera espacial, reloj analógico y controles táctiles XXL', tag: 'Modo Conducción' },
+              { img: '/images/tesla2.jpg', title: 'Librería Google Drive', desc: 'Carpetas sincronizadas /mimusica y buscador de pistas', tag: 'Música en la Nube' },
+              { img: '/images/tesla3.jpg', title: 'Buscador de Emisoras en Vivo', desc: 'Emisoras nacionales y locales ordenadas por ciudad y género', tag: 'Radio Digital' },
+              { img: '/images/tesla4.jpg', title: 'Gestión de Favoritas', desc: 'Acceso directo con un solo toque sin distraer la vista', tag: 'Favoritas' },
+              { img: '/images/tesla5.jpg', title: 'Transición Fluida', desc: 'Conmutación instantánea entre pantalla completa y modo HUD', tag: 'Rendimiento' },
+              { img: '/images/tesla6.jpg', title: 'Listas de Reproducción por Carpeta', desc: 'Organización limpia sin etiquetas complejas ni cables USB', tag: 'Simplicidad' },
             ].map((item, i) => (
               <div
                 key={i}
-                className="group relative rounded-2xl overflow-hidden bg-white/[0.03] border border-white/10 hover:border-cyan-500/50 transition-all p-5 flex flex-col justify-between"
+                className="group relative rounded-2xl overflow-hidden bg-white/[0.03] border border-white/10 hover:border-cyan-500/50 transition-all flex flex-col justify-between shadow-lg"
               >
-                <div>
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-mono mb-3">
-                    {item.tag}
-                  </span>
-                  <h5 className="font-bold text-base text-white mb-1">{item.title}</h5>
-                  <p className="text-xs text-gray-400">{item.desc}</p>
+                <div className="relative aspect-video w-full overflow-hidden bg-black/60">
+                  <img
+                    src={item.img}
+                    alt={item.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#030308] via-transparent to-transparent opacity-70" />
                 </div>
-
-                <div className="mt-6 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-500">
-                  <span>Pantalla de 15"</span>
-                  <span className="text-cyan-400 group-hover:translate-x-1 transition-transform">100% Táctil →</span>
+                <div className="p-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-mono mb-2">
+                      {item.tag}
+                    </span>
+                    <h5 className="font-bold text-sm text-white mb-1">{item.title}</h5>
+                    <p className="text-xs text-gray-400">{item.desc}</p>
+                  </div>
+                  <div className="mt-4 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-500">
+                    <span>Pantalla de 15"</span>
+                    <span className="text-cyan-400">100% Táctil</span>
+                  </div>
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Sección: Vídeo Demostración Real en Coche */}
+        <section className="mb-20">
+          <div className="text-center mb-8">
+            <span className="inline-block px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 font-mono text-xs uppercase mb-3 border border-cyan-500/30">
+              Demostración en Video
+            </span>
+            <h3 className="text-2xl sm:text-3xl font-black mb-2">Demostración en Tiempo Real</h3>
+            <p className="text-gray-400 text-sm max-w-xl mx-auto">
+              Comprueba la velocidad de respuesta, el cambio inmediato de pistas y la fluidez táctil en el vehículo.
+            </p>
+          </div>
+
+          <div className="max-w-3xl mx-auto rounded-3xl overflow-hidden border-2 border-white/20 shadow-[0_0_50px_rgba(6,182,212,0.25)] bg-black">
+            <video
+              src="/videos/demo2.mp4"
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full h-auto rounded-3xl"
+            />
           </div>
         </section>
 

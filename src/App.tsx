@@ -62,6 +62,14 @@ const getDeletedFavsStorageKey = (userId?: string | null) =>
 export default function App() {
   const [isLandingPage, setIsLandingPage] = useState(() => window.location.pathname === '/info');
   const [accessInfo, setAccessInfo] = useState(() => getStoredAccessInfo());
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setIsLandingPage(window.location.pathname === '/info');
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
   const [stations, setStations] = useState<RadioStation[]>(INITIAL_STATIONS);
   const [currentStation, setCurrentStation] = useState<RadioStation>(INITIAL_STATIONS[0]);
   const currentStationRef = useRef<RadioStation>(INITIAL_STATIONS[0]);
@@ -1318,8 +1326,10 @@ export default function App() {
         onAccessGranted={() => {
           const updated = getStoredAccessInfo();
           setAccessInfo(updated);
-          setIsLandingPage(false);
-          window.history.replaceState(null, '', '/');
+          if (!isLandingPage) {
+            setIsLandingPage(false);
+            window.history.replaceState(null, '', '/');
+          }
         }}
       />
     );

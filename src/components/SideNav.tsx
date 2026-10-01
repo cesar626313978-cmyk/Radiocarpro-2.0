@@ -126,6 +126,21 @@ export const SideNav: React.FC<SideNavProps> = ({
             </div>
           </button>
         )}
+
+        {/* Info / Landing Page Link */}
+        <a
+          href="/info"
+          className="flex items-center justify-between p-3 xl:p-3.5 border-3 border-black font-mono-tech text-xs xl:text-sm font-bold text-left uppercase transition-all duration-100 w-full cursor-pointer bg-[#18181c] text-white hover:bg-[#23232b] hover:translate-x-0.5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mt-1.5"
+          title="Ver página de información, características y contacto"
+        >
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <span className="material-symbols-outlined text-xl shrink-0 text-cyan-400">
+              info
+            </span>
+            <span className="truncate text-cyan-300">Info / Ayuda</span>
+          </div>
+          <span className="material-symbols-outlined text-sm text-gray-400">open_in_new</span>
+        </a>
       </nav>
 
       {/* System Status Pill */}
