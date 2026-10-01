@@ -28,6 +28,11 @@ import { teslaBackgroundService } from './services/teslaBackgroundService';
 import { startTokenHeartbeat } from './services/googleDriveAuth';
 import { LandingPage } from './components/LandingPage';
 import {
+  getStoredAccessInfo,
+  registerSubscriber,
+  isGmailAddress,
+} from './services/subscriberService';
+import {
   auth,
   signInWithGoogle,
   handleRedirectAuth,
@@ -55,12 +60,9 @@ const getDeletedFavsStorageKey = (userId?: string | null) =>
   userId ? `radiostream_deleted_favs_${userId}` : 'radiostream_deleted_favs_guest';
 
 export default function App() {
-  const [isLandingPage] = useState(window.location.pathname === '/info');
+  const [isLandingPage, setIsLandingPage] = useState(() => window.location.pathname === '/info');
+  const [accessInfo, setAccessInfo] = useState(() => getStoredAccessInfo());
   const [stations, setStations] = useState<RadioStation[]>(INITIAL_STATIONS);
-  
-  if (isLandingPage) {
-    return <LandingPage />;
-  }
   const [currentStation, setCurrentStation] = useState<RadioStation>(INITIAL_STATIONS[0]);
   const currentStationRef = useRef<RadioStation>(INITIAL_STATIONS[0]);
   useEffect(() => {
@@ -693,6 +695,10 @@ export default function App() {
     handleRedirectAuth().then(redirectUser => {
       if (redirectUser) {
         setUser(redirectUser);
+        if (redirectUser.email && isGmailAddress(redirectUser.email)) {
+          registerSubscriber(redirectUser.email, redirectUser.displayName || undefined, 'redirect_auth');
+          setAccessInfo({ hasAccess: true, email: redirectUser.email });
+        }
         try {
           localStorage.setItem(
             'radiostream_paired_user',
@@ -711,6 +717,10 @@ export default function App() {
     const unsubscribeAuth = onAuthStateChanged(auth, currentUser => {
       if (currentUser) {
         setUser(currentUser);
+        if (currentUser.email && isGmailAddress(currentUser.email)) {
+          registerSubscriber(currentUser.email, currentUser.displayName || undefined, 'auth_state_changed');
+          setAccessInfo({ hasAccess: true, email: currentUser.email });
+        }
         try {
           localStorage.setItem(
             'radiostream_paired_user',
@@ -1288,6 +1298,28 @@ export default function App() {
         onDone={() => {
           setMobilePairCode(null);
           window.history.replaceState(null, '', window.location.pathname);
+        }}
+      />
+    );
+  }
+
+  // Access control gate: Verify user has active access with Gmail
+  const isAllowedAccess = Boolean(
+    accessInfo.hasAccess ||
+    user?.email ||
+    localStorage.getItem('audiocar_access_verified') === 'true' ||
+    localStorage.getItem('radiostream_paired_user')
+  );
+
+  if (isLandingPage || !isAllowedAccess) {
+    return (
+      <LandingPage
+        requireAccessPrompt={!isAllowedAccess && !isLandingPage}
+        onAccessGranted={() => {
+          const updated = getStoredAccessInfo();
+          setAccessInfo(updated);
+          setIsLandingPage(false);
+          window.history.replaceState(null, '', '/');
         }}
       />
     );

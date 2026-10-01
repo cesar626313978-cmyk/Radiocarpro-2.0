@@ -49,5 +49,12 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if false;
     }
+
+    // Registered Beta Users / Subscribers (Google Sheets Export)
+    match /subscribers/{subId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(subId);
+      allow delete: if false;
+    }
   }
 }
