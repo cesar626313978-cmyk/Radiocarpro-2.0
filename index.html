@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <script>
+      if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        window.location.replace('https://' + window.location.host + window.location.pathname + window.location.search);
+      }
+    </script>
     <title>Myradio Pro 2.0</title>
     <meta name="description" content="Reproductor de radio por internet y música de Google Drive de alto rendimiento con sintonización instantánea." />
     <meta property="og:title" content="Myradio Pro 2.0" />

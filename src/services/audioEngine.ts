@@ -228,6 +228,10 @@ class RadioAudioEngine {
     onError?: (msg?: string) => void,
     onBuffering?: () => void
   ) {
+    try {
+      driveAudioEngine.stopAndDisconnect();
+    } catch {}
+
     this.currentStreamUrl = url;
     this.shouldBePlaying = true;
     this.reconnectAttempts = 0;

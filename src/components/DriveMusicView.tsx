@@ -118,6 +118,27 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
     return unsub;
   }, []);
 
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      try {
+        const cachedIds = await driveCacheService.getCachedFileIds();
+        setFiles(prev => prev.map(f => ({ ...f, isCached: cachedIds.includes(f.id) })));
+        setAllRecursiveFiles(prev => prev.map(f => ({ ...f, isCached: cachedIds.includes(f.id) })));
+      } catch {}
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Proactive check when switching back to tab or focusing
   useEffect(() => {
     const handleCheckOnFocus = () => {
@@ -602,8 +623,12 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   // Play active folder (sequential or shuffle)
   const handlePlayActiveFolder = async (shuffle = false) => {
     const baseList = displayedTracks.length > 0 ? displayedTracks : activeFolderTracks;
-    if (baseList.length === 0) return;
-    let listToPlay = [...baseList];
+    const playableList = baseList.filter(f => f.isCached || (isOnline && Boolean(googleDriveService.getToken())));
+    if (playableList.length === 0) {
+      setErrorMessage('No hay canciones disponibles para reproducir sin conexión en esta carpeta.');
+      return;
+    }
+    let listToPlay = [...playableList];
     if (shuffle) {
       for (let i = listToPlay.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -700,6 +725,11 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
   };
 
   const handleTrackRowClick = (file: DriveAudioFile, idx: number) => {
+    const playable = file.isCached || (isOnline && Boolean(googleDriveService.getToken()));
+    if (!playable) {
+      setErrorMessage(`"${file.name}" no está disponible sin conexión (requiere internet o caché local).`);
+      return;
+    }
     if (currentTrack?.id === file.id) {
       if (playbackStatus === 'playing') {
         driveAudioEngine.pause();
@@ -707,7 +737,9 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
         driveAudioEngine.resume();
       }
     } else {
-      handleSelectTrack(file, idx, displayedTracks);
+      const currentList = displayedTracks.length > 0 ? displayedTracks : (allRecursiveFiles.length > 0 ? allRecursiveFiles : files);
+      const trackIdx = currentList.findIndex(f => f.id === file.id);
+      handleSelectTrack(file, trackIdx >= 0 ? trackIdx : idx, currentList);
     }
   };
 
@@ -1280,26 +1312,34 @@ export const DriveMusicView: React.FC<DriveMusicViewProps> = ({
                           </span>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTrackRowClick(file, idx);
-                          }}
-                          title={isPlaying ? t.player.pause : isCurrent && playbackStatus === 'buffering' ? 'Cargando pista...' : t.player.play}
-                          aria-label={isPlaying ? t.player.pause : isCurrent && playbackStatus === 'buffering' ? 'Cargando pista...' : t.player.play}
-                          className={`w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer shrink-0 transition-transform active:scale-95 shadow-md ${
-                            isPlaying
-                              ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/50 hover:bg-zinc-700'
-                              : isCurrent && playbackStatus === 'buffering'
-                              ? 'bg-amber-500 text-black shadow-[0_0_12px_rgba(245,158,11,0.5)]'
-                              : 'bg-emerald-500 hover:bg-emerald-400 text-black'
-                          }`}
-                        >
-                          <span className={`material-symbols-outlined text-xl font-black ${isCurrent && playbackStatus === 'buffering' ? 'animate-spin' : ''}`}>
-                            {isPlaying ? 'pause' : isCurrent && playbackStatus === 'buffering' ? 'progress_activity' : 'play_arrow'}
-                          </span>
-                        </button>
+                        {(() => {
+                          const playable = file.isCached || (isOnline && Boolean(googleDriveService.getToken()));
+                          return (
+                            <button
+                              type="button"
+                              disabled={!playable}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTrackRowClick(file, idx);
+                              }}
+                              title={!playable ? 'No disponible sin conexión (Requiere internet)' : isPlaying ? t.player.pause : isCurrent && playbackStatus === 'buffering' ? 'Cargando pista...' : t.player.play}
+                              aria-label={!playable ? 'No disponible sin conexión' : isPlaying ? t.player.pause : t.player.play}
+                              className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform shadow-md ${
+                                !playable
+                                  ? 'bg-zinc-800 text-zinc-600 opacity-40 cursor-not-allowed border border-zinc-700/30'
+                                  : isPlaying
+                                  ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/50 hover:bg-zinc-700 cursor-pointer active:scale-95'
+                                  : isCurrent && playbackStatus === 'buffering'
+                                  ? 'bg-amber-500 text-black shadow-[0_0_12px_rgba(245,158,11,0.5)] cursor-pointer active:scale-95'
+                                  : 'bg-emerald-500 hover:bg-emerald-400 text-black cursor-pointer active:scale-95'
+                              }`}
+                            >
+                              <span className={`material-symbols-outlined text-xl font-black ${isCurrent && playbackStatus === 'buffering' ? 'animate-spin' : ''}`}>
+                                {!playable ? 'cloud_off' : isPlaying ? 'pause' : isCurrent && playbackStatus === 'buffering' ? 'progress_activity' : 'play_arrow'}
+                              </span>
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
                   );

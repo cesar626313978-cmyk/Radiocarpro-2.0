@@ -5,6 +5,7 @@ import { googleDriveService } from './googleDriveService';
 import { trySilentTokenRefresh, getStoredAccessToken, clearStoredAccessToken } from './googleDriveAuth';
 import { teslaBackgroundService } from './teslaBackgroundService';
 import { AudioNormalizer } from './audioNormalizerNode';
+import { audioEngine } from './audioEngine';
 
 /**
  * DriveAudioEngine
@@ -950,6 +951,10 @@ export class DriveAudioEngine {
   }
 
   public async playTrack(track: DriveAudioFile, token?: string) {
+    try {
+      audioEngine.cleanupAudio();
+    } catch {}
+
     // 1. Cancelar crossfade y descargas previas para respuesta inmediata sin carreras
     this.cancelCrossfade();
     if (this.currentAbortController) {

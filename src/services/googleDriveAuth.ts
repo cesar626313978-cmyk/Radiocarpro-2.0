@@ -125,6 +125,11 @@ export function initGoogleAuth(
       }
     },
     error_callback: (error: any) => {
+      const msg = typeof error === 'string' ? error : (error?.message || JSON.stringify(error));
+      if (msg.includes('Popup window closed') || msg.includes('popup_closed') || msg.includes('closed')) {
+        console.log('[Auth] El usuario cerró la ventana emergente de Google OAuth.');
+        return;
+      }
       console.warn('[Auth Error]:', error);
       if (typeof activeErrorCallback === 'function') {
         activeErrorCallback(error);
